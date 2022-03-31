@@ -1,0 +1,12 @@
+figures
+jars
+data
+venv
+target
+.ipynb_checkpoints
+dependency-reduced-pom.xml
+flink-1.14.0
+kafka_2.13-3.1.0
+.idea
+*.iml
+__pycache__

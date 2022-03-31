@@ -1,0 +1,31 @@
+SOURCE:
+  downstream:
+    - MAP-SINGLE-OBJECT
+
+MAP-SINGLE-OBJECT:
+  downstream:
+    - FILTER-PEDESTRIANS
+
+FILTER-PEDESTRIANS:
+  downstream:
+    - JOIN-ONE
+    - JOIN-TWO
+
+JOIN-ONE:
+  downstream:
+    - JOIN
+  renamings:
+    f1: f0
+
+JOIN-TWO:
+  downstream:
+    - JOIN
+  renamings:
+    f0: NULL
+
+JOIN:
+  downstream:
+    - SINK
+
+SINK:
+  downstream: []

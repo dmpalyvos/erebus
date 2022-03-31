@@ -1,0 +1,55 @@
+SOURCE:
+  downstream:
+    - FILTER-ZERO-SPEED
+
+FILTER-ZERO-SPEED:
+  renamings:
+    vid: vid
+    xway: latestXWay
+    lane: lane
+    dir: dir
+    seg: seg
+    pos: pos
+  downstream:
+    - AGGREGATE-STOPPED
+
+AGGREGATE-STOPPED:
+  WS: 120000
+  WA: 30000
+  renamings:
+    vid: vid
+    xway: latestXWay
+    lane: latestLane
+    dir: latestDir
+    seg: latestSeg
+    pos: latestPos
+  downstream:
+    - FILTER-STOPPED
+
+FILTER-STOPPED:
+  downstream:
+    - AGGREGATE-ACCIDENT
+
+AGGREGATE-ACCIDENT:
+  WS: 30000
+  WA: 30000
+  renamings:
+    vid: vids
+    latestXWay: xway
+    latestLane: lane
+    latestDir: dir
+    latestSeg: seg
+    latestPos: pos
+  transforms:
+    vid: TOSET
+  downstream:
+    - FILTER-ACCIDENT
+
+FILTER-ACCIDENT:
+  renamings:
+    count: count
+  downstream:
+    - SINK
+
+SINK:
+  downstream: []

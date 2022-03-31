@@ -1,0 +1,86 @@
+SOURCE:
+  downstream:
+    - CYCLISTS-SINGLE-OBJECT
+    - PEDESTRIANS-SINGLE-OBJECT
+
+CYCLISTS-SINGLE-OBJECT:
+  downstream:
+    - FILTER-BICYCLES
+
+FILTER-BICYCLES:
+  renamings:
+    type: type
+    target: target
+    key: key
+    label: label
+    x: x
+    y: y
+    z: z
+  downstream:
+    - AGGREGATE-COUNT
+
+AGGREGATE-COUNT:
+  WS: 6000
+  WA: 3000
+  renamings:
+    type: type
+    target: target
+    key: key
+    label: label
+    x: minX
+    y: minY
+    z: minZ
+  downstream:
+    - FILTER-CYCLES-INFRONT
+
+FILTER-CYCLES-INFRONT:
+  downstream:
+    - SINK
+
+PEDESTRIANS-SINGLE-OBJECT:
+  downstream:
+    - FILTER-PEDESTRIANS
+
+FILTER-PEDESTRIANS:
+  renamings:
+    type: type
+    target: target
+    key: key
+    label: label
+    x: x
+    y: y
+    z: z
+  downstream:
+    - JOIN-ONE
+    - JOIN-TWO
+
+JOIN-ONE:
+  downstream:
+    - JOIN
+  renamings:
+    target: target
+    type: type
+    key: key
+    label: label
+    x: minX
+    y: minY
+    z: minZ
+
+JOIN-TWO:
+  downstream:
+    - JOIN
+  renamings:
+    target: target
+    type: NONE
+    key: NONE
+    label: NONE
+    x: minX
+    y: minY
+    z: minZ
+
+JOIN:
+  downstream:
+    - SINK
+
+SINK:
+  downstream: []

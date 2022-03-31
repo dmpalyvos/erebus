@@ -1,0 +1,54 @@
+# Experiment template file
+# All instances of {repo_dir} will be replaced by the absolute path of the repository
+
+executor_script: './scripts/flink_server_do_run.sh'
+
+query: 'Movies'
+
+dimensions:
+  schema: variant.predicate
+  predicate:
+    - "none"
+    - "true"
+    - "Q1"
+    - "Q2"
+
+variants:
+  - name: NP
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.movies.noprovenance.Movies {query_jar}
+      --inputFolder {input_folder} --statisticsFolder {statistics_folder} 
+      --kafkaHost {kafkaHost} --kafkaPartitions {kafkaPartitions} --parallelism {kafkaPartitions}
+      {args} {experiment_args} {extra_args}
+    args: ''
+    kafkaPartitions: 8
+    filter:
+      predicate:
+        - "none"
+  - name: MA-1
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.movies.provenance2.Movies {query_jar}
+      --inputFolder {input_folder} --statisticsFolder {statistics_folder} 
+      --kafkaHost {kafkaHost} --kafkaPartitions {kafkaPartitions} --parallelism {kafkaPartitions}
+      {args} {experiment_args} {extra_args}
+    kafkaPartitions: 8
+    args: ' --provenance false --provenanceActivator GENEALOG'
+  - name: MA-P
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.movies.provenance2.Movies {query_jar}
+      --inputFolder {input_folder} --statisticsFolder {statistics_folder}
+      --kafkaHost {kafkaHost} --kafkaPartitions {kafkaPartitions} --parallelism {kafkaPartitions}
+      {args} {experiment_args} {extra_args}
+    args: ' --provenance true --provenanceActivator ANANKE'
+    kafkaPartitions: 8
+
+flink_cmd: "{repo_dir}/flink-1.14.0/bin/flink run --class"
+query_jar: "{repo_dir}/target/streaming-why-not-1.0-SNAPSHOT.jar"
+input_folder: "{repo_dir}/data/input/movies"
+
+experiment_args: "--detailedProvenance false --inputFile ratings_with_metadata --pastBufferBucketSize 100000 --bufferDelay 7890000"
+
+utilization_command: './scripts/utilization-flink.sh {statistics_folder}'

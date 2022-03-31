@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd" >
+
+<suite name="Suite" verbose="1">
+  <test name="Unit-Tests">
+    <packages>
+      <package name="io.palyvos.provenance.missing.predicate"/>
+    </packages>
+  </test>
+</suite>

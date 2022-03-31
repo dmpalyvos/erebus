@@ -1,0 +1,27 @@
+# Experiment template file
+# All instances of {repo_dir} will be replaced by the absolute path of the repository
+
+executor_script: './scripts/flink_server_do_run.sh'
+
+query: 'SyntheticEncapsulation'
+
+dimensions:
+  schema: variant.syntheticUseEncapsulation
+  syntheticUseEncapsulation:
+    - true
+    - false
+
+variants:
+  - name: MA-1
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.synthetic.provenance.queries.SyntheticPickedQuery {query_jar}
+      --kafkaHost {kafkaHost} --statisticsFolder {statistics_folder} {args} {experiment_args} {extra_args}
+    args: ' --provenance false --syntheticProvenanceSize 0 --provenanceActivator GENEALOG'
+
+flink_cmd: "{repo_dir}/flink-1.14.0/bin/flink run --class"
+query_jar: "{repo_dir}/target/streaming-why-not-1.0-SNAPSHOT.jar"
+
+experiment_args: "--detailedProvenance false --kafkaSenderQueueSize 8192 --syntheticFilterDiscardRate 25 --syntheticPredicateSelectivity 25"
+
+utilization_command: './scripts/utilization-flink.sh {statistics_folder}'

@@ -1,0 +1,26 @@
+SOURCE:
+  downstream:
+    - MAP-SINGLE-OBJECT
+
+MAP-SINGLE-OBJECT:
+  downstream:
+    - FILTER-BICYCLES
+
+FILTER-BICYCLES:
+  downstream:
+    - AGGREGATE-COUNT
+
+AGGREGATE-COUNT:
+  WS: 6000
+  WA: 3000
+  renamings:
+    f0: f0
+  downstream:
+    - FILTER-CYCLES-INFRONT
+
+FILTER-CYCLES-INFRONT:
+  downstream:
+    - SINK
+
+SINK:
+  downstream: []

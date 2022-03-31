@@ -1,0 +1,43 @@
+USER-RATING-AGGREGATE:
+  WS: 86400000 # 1 day
+  downstream:
+    - USER-RATING-JOIN-TWO
+
+RATINGS-COUNT-FILTER:
+  renamings:
+    nRatings: nRatings
+    userId: userId
+  downstream:
+    - USER-RATING-JOIN-TWO
+
+USER-RATING-JOIN-ONE:
+  renamings:
+    movieId: movieId
+    userId: userId
+    year: year
+    rating: rating
+  downstream:
+    - USER-RATING-JOIN
+
+USER-RATING-JOIN-TWO:
+  renamings:
+    nRatings: nRatings
+  downstream:
+    - USER-RATING-JOIN
+
+USER-RATING-JOIN:
+  WS: 86400000 # 1 day
+  downstream:
+    - YEAR-FILTER
+
+YEAR-FILTER:
+  downstream:
+    - RATING-VALUE-FILTER
+
+RATING-VALUE-FILTER:
+  downstream:
+    - SINK
+
+SINK:
+  renamings: {}
+  downstream: []

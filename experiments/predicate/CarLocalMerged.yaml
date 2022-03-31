@@ -1,0 +1,49 @@
+# Experiment template file
+# All instances of {repo_dir} will be replaced by the absolute path of the repository
+
+executor_script: './scripts/flink_server_do_run.sh'
+
+query: 'CarLocalMerged'
+
+dimensions:
+  schema: variant.predicate
+  predicate:
+    - "none"
+    - "true"
+    - "Q1"
+    - "Q2"
+
+variants:
+  - name: NP
+    spe_command: >
+      {flink_cmd} {noprov_class} {query_jar} --statisticsFolder {statistics_folder}
+      --kafkaHost {kafkaHost} {experiment_args} {args} {extra_args}
+    datasource_command: "java -cp {query_jar} io.palyvos.provenance.usecases.cars.local.CarLocalDataProvider -p {source_port} -h {source_host} -f data/input/only_annotations &"
+    args: ''
+    filter:
+      predicate:
+        - "none"
+  - name: MA-1
+    spe_command: >
+      {flink_cmd} {prov_class} {query_jar} --statisticsFolder {statistics_folder}
+      --kafkaHost {kafkaHost} {args} {experiment_args} {extra_args}
+    datasource_command: "java -cp {query_jar} io.palyvos.provenance.usecases.cars.local.CarLocalDataProvider -p {source_port} -h {source_host} -f data/input/only_annotations &"
+    args: ' --provenance false --provenanceActivator GENEALOG'
+  - name: MA-P
+    spe_command: >
+      {flink_cmd} {prov_class} {query_jar} --statisticsFolder {statistics_folder} 
+      --kafkaHost {kafkaHost}  {args} {experiment_args} {extra_args}
+    datasource_command: "java -cp {query_jar} io.palyvos.provenance.usecases.cars.local.CarLocalDataProvider -p {source_port} -h {source_host} -f data/input/only_annotations &"
+    args: ' --provenance true --provenanceActivator ANANKE'
+
+flink_cmd: "{repo_dir}/flink-1.14.0/bin/flink run --class"
+noprov_class: "io.palyvos.provenance.usecases.cars.local.noprovenance.queries.CarLocalMerged"
+prov_class: "io.palyvos.provenance.usecases.cars.local.provenance2.queries.CarLocalMerged"
+query_jar: "{repo_dir}/target/streaming-why-not-1.0-SNAPSHOT.jar"
+
+source_port: 9999
+source_host: 127.0.0.1
+experiment_args: "--sourceIP 127.0.0.1 --sourcePort 9999 --bufferDelay 30 --parallelism 8"
+
+
+utilization_command: './scripts/utilization-flink.sh {statistics_folder}'

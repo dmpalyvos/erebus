@@ -1,0 +1,51 @@
+# Experiment template file
+# All instances of {repo_dir} will be replaced by the absolute path of the repository
+
+executor_script: './scripts/flink_do_run.sh'
+
+query: 'SmartGridAnomaly'
+
+dimensions:
+  schema: variant.predicate
+  predicate:
+    - "none"
+    - "true"
+    - "Q1"
+    - "Q2"
+
+variants:
+  - name: NP
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.smartgrid.noprovenance.SmartGridAnomaly {query_jar}
+      --kafkaPartitions {kafkaPartitions} --parallelism {kafkaPartitions}
+      --kafkaHost {kafkaHost} --inputFolder {input_folder} --statisticsFolder {statistics_folder} {args} {experiment_args} {extra_args}
+    args: ''
+    filter:
+      predicate:
+        - "none"
+    kafkaPartitions: 4
+  - name: MA-1
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.smartgrid.provenance2.SmartGridAnomaly {query_jar}
+      --kafkaPartitions {kafkaPartitions} --parallelism {kafkaPartitions}
+      --kafkaHost {kafkaHost} --inputFolder {input_folder} --statisticsFolder {statistics_folder} {args} {experiment_args} {extra_args}
+    args: ' --provenance false --provenanceActivator GENEALOG --bufferDelay 3600'
+    kafkaPartitions: 4
+  - name: MA-P
+    spe_command: >
+      {flink_cmd}
+      io.palyvos.provenance.usecases.smartgrid.provenance2.SmartGridAnomaly {query_jar}
+      --kafkaPartitions {kafkaPartitions} --parallelism {kafkaPartitions}
+      --kafkaHost {kafkaHost} --inputFolder {input_folder} --statisticsFolder {statistics_folder} {args} {experiment_args} {extra_args}
+    args: ' --provenance true --provenanceActivator ANANKE --bufferDelay 120'
+    kafkaPartitions: 4
+
+flink_cmd: "{repo_dir}/flink-1.14.0/bin/flink run --class"
+query_jar: "{repo_dir}/target/streaming-why-not-1.0-SNAPSHOT.jar"
+input_folder: "{repo_dir}/data/input/sg-debs"
+
+experiment_args: "--detailedProvenance false --aggregateStrategy unsortedPtr --kafkaSenderQueueSize 512 --inputFile sg-debs-1G "
+
+utilization_command: './scripts/utilization-flink.sh {statistics_folder}'

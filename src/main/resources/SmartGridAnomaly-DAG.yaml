@@ -1,0 +1,70 @@
+SOURCE:
+  downstream:
+    - HOUSEHOLD-AGGREGATE
+    - PLUG-INTERVAL-FILTER
+
+HOUSEHOLD-AGGREGATE:
+  renamings:
+    householdId: householdId
+    houseId: houseId
+    plugId: NONE
+    value: NONE
+  downstream:
+    - JOIN-ONE
+  WS: 60000
+
+PLUG-INTERVAL-FILTER:
+  renamings:
+    value: value
+    householdId: householdId
+    houseId: houseId
+    plugId: plugId
+  downstream:
+    - INTERVAL-AGGREGATE
+
+JOIN-ONE:
+  downstream:
+    - JOIN
+  renamings:
+    usage: averageUsage
+    householdId: householdId
+    houseId: houseId
+
+INTERVAL-AGGREGATE:
+  renamings:
+    value: NONE
+    householdId: householdId
+    houseId: houseId
+    plugId: plugId
+  downstream:
+    - INTERVAL-ENDS-FILTER
+  WS: 60000
+
+INTERVAL-ENDS-FILTER:
+  renamings:
+    usage: usage
+  downstream:
+    - JOIN-TWO
+
+JOIN-TWO:
+  downstream:
+    - JOIN
+  renamings:
+    usage: plugUsage
+    householdId: householdId
+    houseId: houseId
+    plugId: plugId
+  transforms:
+    usage: ROUND
+
+JOIN:
+  WS: 15000
+  downstream:
+    - ANOMALY-LIMIT-FILTER
+
+ANOMALY-LIMIT-FILTER:
+  downstream:
+    - SINK
+
+SINK:
+  downstream: []

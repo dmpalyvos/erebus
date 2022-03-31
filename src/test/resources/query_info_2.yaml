@@ -1,0 +1,19 @@
+AGG:
+  renamings:
+    movieId: movieIdentifier
+  downstream:
+    - FRATING
+
+FRATING:
+  renamings: {}
+  downstream:
+    - FCOUNT
+
+FCOUNT:
+  renamings: {}
+  downstream:
+    - SINK
+
+SINK:
+  renamings: {}
+  downstream: []

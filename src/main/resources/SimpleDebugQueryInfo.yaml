@@ -1,0 +1,27 @@
+TEMP:
+  downstream:
+    - TEMP-J1
+
+SMOKE:
+  downstream:
+    - SMOKE-J1
+
+TEMP-J1:
+  downstream:
+    - J1
+
+SMOKE-J1:
+  downstream:
+    - J1
+
+J1:
+  WS: 3000
+  downstream:
+    - F1
+
+F1:
+  downstream:
+    - SINK
+
+
+

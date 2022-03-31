@@ -1,0 +1,3 @@
+# Global config parameters for run.py
+output_folder: data/output/
+sleep_after: 0.15

@@ -1,0 +1,46 @@
+OTHER:
+  downstream:
+    - LEFT
+    - O
+  WS: 1000
+
+O:
+  downstream:
+    - LEFT
+    - RIGHT
+  renamings:
+    V1: V2
+  transforms:
+    V1: f
+  WS: 333
+
+LEFT:
+  downstream:
+    - SINK
+    - LEFTSIDE
+  renamings:
+    V1: NONE
+    V2: VARSINK1
+  transforms:
+    V2: g
+  WS: 554
+  WA: 732
+
+LEFTSIDE:
+  downstream:
+    - SINK
+  transforms:
+    VARSINK1: k
+
+RIGHT:
+  downstream:
+    - SINK
+  renamings: {}
+  transforms:
+    V2: h
+  WS: 7777
+  WA: 4800
+
+SINK:
+  downstream: []
+  renamings: {}

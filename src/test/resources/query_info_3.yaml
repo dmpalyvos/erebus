@@ -1,0 +1,21 @@
+LEFT:
+  renamings:
+    A: Anew
+  downstream:
+    - JOIN
+
+RIGHT:
+  renamings:
+    B: Anew
+  downstream:
+    - JOIN
+
+JOIN:
+  renamings:
+    Anew: Anew
+  downstream:
+    - SINK
+
+SINK:
+  renamings: {}
+  downstream: []
