@@ -51,8 +51,8 @@ and compile the framework.
 In case of problems with the automatic setup, you can prepare the environment manually:
 
 1. Download [Apache Flink 1.14.0](https://archive.apache.org/dist/flink/flink-1.14.0/flink-1.14.0-bin-scala_2.11.tgz) and decompress in `repo_dir`
-2. Download [Apache Kafka 2.12-3.1.0](https://archive.apache.org/dist/kafka/3.1.0/kafka_2.12-3.1.0.tgz) and decompress in `repo_dir`
-3. Get the input datasets, either using `./get-datasets.sh` or by manually downloading from [TODO]() and decompressing in `repo_dir/data/input`
+2. Download [Apache Kafka 2.13-3.1.0](https://archive.apache.org/dist/kafka/3.1.0/kafka_2.13-3.1.0.tgz) and decompress in `repo_dir`
+3. Get the input datasets, either using `./get-datasets.sh` or by manually downloading from [here](https://drive.google.com/uc?id=1464hH2-b7eKvtGh-tK_ku4aouFiagISw) and decompressing in `repo_dir/data/input`
 4. Compile the two experiment jars, from repo dir: `mvn -f helper_pom.xml clean package && mv target/helper*.jar jars; mvn clean package`
 2. Run `./init-configs.sh NODE_TYPE` where NODE_TYPE is `odroid` or `server` to use the Kafka/Flink configurations used in our experiments
 
