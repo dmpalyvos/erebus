@@ -149,15 +149,15 @@ public class PickedProvenanceQuerySink<T extends ProvenanceTupleContainer> exten
 
   @Override
   public void updatePredicate(Predicate newPredicate) {
-    final Predicate renamed = newPredicate.renamed(name);
+    final Predicate updatedPredicate = newPredicate.transformedNameOnly(name);
     if (predicateSlackMillis > 0) {
-      this.sinkPredicate = renamed.timeShifted(
+      this.sinkPredicate = updatedPredicate.manualTimeShifted(
           (l, r) -> OptionalLong.of(l),
           slackPredicateRightBoundaryTransform());
       LOG.info("Adding {} slack to the predicate. New predicate: {}", predicateSlackMillis,
           sinkPredicate);
     } else {
-      this.sinkPredicate = renamed;
+      this.sinkPredicate = updatedPredicate;
     }
   }
 

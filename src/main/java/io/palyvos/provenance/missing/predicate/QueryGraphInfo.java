@@ -1,5 +1,6 @@
 package io.palyvos.provenance.missing.predicate;
 
+import io.palyvos.provenance.missing.util.Path;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.Serializable;
@@ -46,6 +47,10 @@ public class QueryGraphInfo implements Serializable {
     }
     final long epsilon = WINDOW_OUTPUT_TIMESTAMP_DISTANCE_FROM_RIGHT_BOUNDARY.applyAsLong(
         windowSize);
+    if (intervalStart < windowSize - epsilon) {
+      // Time starts at 0, so there is no earlier window that satisfies the property
+      return OptionalLong.of(0);
+    }
     final long windowIdx = (long) Math.ceil(
         (intervalStart - windowSize + epsilon) / (double) windowAdvance);
     final long rightBoundaryGreaterEqual = windowSize + windowAdvance * windowIdx;
@@ -67,12 +72,12 @@ public class QueryGraphInfo implements Serializable {
     if (windowSize == 0) {
       return OptionalLong.of(intervalEnd);
     }
-    if (intervalEnd <= windowSize) {
+    final long epsilon = WINDOW_OUTPUT_TIMESTAMP_DISTANCE_FROM_RIGHT_BOUNDARY.applyAsLong(
+        windowSize);
+    if (intervalEnd <= windowSize - epsilon) {
       // Time starts at 0, so there is no earlier window that satisfies the property
       return OptionalLong.empty();
     }
-    final long epsilon = WINDOW_OUTPUT_TIMESTAMP_DISTANCE_FROM_RIGHT_BOUNDARY.applyAsLong(
-        windowSize);
     final long windowIdx = (long) Math.floor(
         (intervalEnd - windowSize - EVENT_TIME_DELTA + epsilon) / (double) windowAdvance);
     final long rightBoundaryLessThan = windowSize + windowAdvance * windowIdx;
@@ -285,7 +290,8 @@ public class QueryGraphInfo implements Serializable {
   private Set<VariableRenaming> operatorToSinkVariables(String operatorVariable, Operator operator,
       Operator sink) {
     final Set<VariableRenaming> variableRenamings = operatorToSinkVariables(
-        new HashSet<>(Arrays.asList(VariableRenaming.of(operatorVariable))), operator, sink);
+        new HashSet<>(Arrays.asList(VariableRenaming.newInstance(operatorVariable))), operator,
+        sink);
     variableRenamings.forEach(r -> r.computeTransform(registeredTransforms));
     return variableRenamings;
   }
@@ -296,16 +302,16 @@ public class QueryGraphInfo implements Serializable {
   private Set<VariableRenaming> operatorToSinkVariables(Set<VariableRenaming> variables,
       Operator operator,
       Operator sink) {
+    Set<VariableRenaming> downstreamVariables = variables.stream()
+        .map(renaming -> renaming.transformed(operator.renamed(renaming.name()),
+            operator.transform(renaming.name()), operator.id()))
+        .collect(Collectors.toSet());
     if (operator.equals(sink)) {
-      return variables;
+      return downstreamVariables;
     } else if (operator.isSink()) {
       // Unrelated sink, ignore
       return Collections.emptySet();
     }
-    Set<VariableRenaming> downstreamVariables = variables.stream()
-        .map(renaming -> renaming.transformed(operator.renamed(renaming.name()),
-            operator.transform(renaming.name())))
-        .collect(Collectors.toSet());
     return operator.downstream().stream()
         .map(downStreamOperator -> operatorToSinkVariables(downstreamVariables,
             downStreamOperator, sink))
@@ -313,34 +319,97 @@ public class QueryGraphInfo implements Serializable {
         .collect(Collectors.toSet());
   }
 
-  public OptionalLong transformIntervalStartFromSink(String sinkId, String targetOperatorId,
+  public OptionalLong legacyTransformIntervalStartFromSink(String sinkId,
+      String targetOperatorId,
+      long intervalStart, long intervalEnd) {
+    final Map<Path, OptionalLong> pathBoundaries = transformIntervalStartFromSink(sinkId,
+        targetOperatorId, intervalStart,
+        intervalEnd);
+    return pathBoundaries.values().stream().filter(OptionalLong::isPresent)
+        .mapToLong(OptionalLong::getAsLong).reduce(Long::min);
+  }
+
+  public Map<Path, OptionalLong> transformIntervalStartFromSink(String sinkId,
+      String targetOperatorId,
       long intervalStart, long intervalEnd) {
     Validate.isTrue(intervalEnd > intervalStart, "intervalEnd <= intervalStart!");
     return transformBoundary(operators.get(sinkId),
         operators.get(targetOperatorId),
-        intervalStart, intervalEnd - intervalStart,
-        Math::min, INTERVAL_START_TRANSFORM, (b, s) -> b + s);
+        intervalStart, intervalEnd - intervalStart, INTERVAL_START_TRANSFORM, (b, s) -> b + s);
   }
 
-  public OptionalLong transformIntervalEndFromSink(String sinkId, String targetOperatorId,
+  public OptionalLong legacyTransformIntervalEndFromSink(String sinkId,
+      String targetOperatorId,
+      long intervalStart, long intervalEnd) {
+    final Map<Path, OptionalLong> pathBoundaries = transformIntervalEndFromSink(
+        sinkId, targetOperatorId, intervalStart, intervalEnd);
+    return pathBoundaries.values().stream().filter(OptionalLong::isPresent)
+        .mapToLong(OptionalLong::getAsLong).reduce(Long::max);
+  }
+
+  public Map<Path, OptionalLong> transformIntervalEndFromSink(String sinkId,
+      String targetOperatorId,
       long intervalStart, long intervalEnd) {
     Validate.isTrue(intervalEnd > intervalStart, "intervalEnd <= intervalStart!");
-    return transformBoundary(operators.get(sinkId),
+    final Map<Path, OptionalLong> boundaries = transformBoundary(operators.get(sinkId),
         operators.get(targetOperatorId),
         intervalEnd, intervalEnd - intervalStart,
-        Math::max, INTERVAL_END_TRANSFORM, (b, s) -> b - s);
+        INTERVAL_END_TRANSFORM, (b, s) -> b - s);
+    return boundaries;
   }
 
-  private OptionalLong transformBoundary(Operator current, Operator target, long boundary,
-      long intervalSize, LongBinaryOperator reduceOperator,
-      BoundaryFunction boundaryFunction,
-      LongBinaryOperator boundaryShiftOperator) {
+
+  Set<Path> upstreamPaths(String current, String target) {
+    Validate.notEmpty(current, "current");
+    Validate.notEmpty(target, "target");
+    return upstreamPaths(operators.get(current), operators.get(target), Path.empty());
+  }
+
+  Set<Path> upstreamPaths(Operator current, Operator target, Path path) {
     Validate.notNull(current, "current");
     Validate.notNull(target, "target");
+    Set<Path> upstreamPaths = new HashSet<>();
+    Path currentPath = path.extended(current.id());
     if ((!current.equals(target)) && current.isSource()) {
-      // Unrelated path, no useful boundary here
-      return OptionalLong.empty();
+      return Collections.emptySet();
     }
+    if (current.equals(target)) {
+      return Collections.singleton(currentPath);
+    }
+    for (Operator upstream : current.upstream()) {
+      upstreamPaths.addAll(upstreamPaths(upstream, target, currentPath));
+    }
+    return upstreamPaths;
+  }
+
+  private Map<Path, OptionalLong> transformBoundary(Operator current, Operator target,
+      long boundary,
+      long intervalSize,
+      BoundaryFunction boundaryFunction,
+      LongBinaryOperator boundaryShiftOperator) {
+    Set<Path> paths = upstreamPaths(current, target, Path.empty());
+    Map<Path, OptionalLong> boundaries = new HashMap<>();
+    Validate.notEmpty(paths, "No path between %s and %s", current, target);
+    for (Path path : paths) {
+      final OptionalLong previous = boundaries.put(path,
+          transformBoundaryForPath(current, target, boundary, intervalSize, boundaryFunction,
+              boundaryShiftOperator, path, 0));
+      Validate.isTrue(previous == null,
+          "Duplicate transformed boundary for path %s. This is a bug!", path);
+    }
+    return boundaries;
+  }
+
+  private OptionalLong transformBoundaryForPath(Operator current, Operator target,
+      long boundary,
+      long intervalSize,
+      BoundaryFunction boundaryFunction,
+      LongBinaryOperator boundaryShiftOperator, Path path, int pathIndex) {
+    Validate.notNull(current, "current");
+    Validate.notNull(target, "target");
+    Validate.isTrue(path.at(pathIndex).equals(current.id()),
+        "Operator '%s' not next in path index %d: '%s'! This is a bug.",
+        current.id(), pathIndex, path);
     while (intervalSize > 0) {
       final OptionalLong currentBoundary = boundaryFunction.apply(boundary,
           current.windowSize(), current.windowAdvance(), intervalSize);
@@ -353,8 +422,9 @@ public class QueryGraphInfo implements Serializable {
       if (current.equals(target)) {
         return currentBoundary;
       }
-      final OptionalLong upstreamBoundary = upstreamBoundary(current, target, reduceOperator,
-          boundaryFunction, currentBoundary, intervalSize, boundaryShiftOperator);
+      final OptionalLong upstreamBoundary = upstreamBoundary(current, target,
+          boundaryFunction, currentBoundary, intervalSize, boundaryShiftOperator, path,
+          pathIndex + 1);
       if (upstreamBoundary.isPresent() || !current.isStateful()) {
         // Return ia the boundary is found or if the operator is stateless
         // it is not possible to retry for stateless operators, WS = 0, we cannot shift boundary
@@ -373,21 +443,23 @@ public class QueryGraphInfo implements Serializable {
   }
 
   private OptionalLong upstreamBoundary(Operator current, Operator target,
-      LongBinaryOperator reduceOperator, BoundaryFunction boundaryFunction,
+      BoundaryFunction boundaryFunction,
       OptionalLong currentBoundary, long intervalSize,
-      LongBinaryOperator boundaryShiftOperator) {
+      LongBinaryOperator boundaryShiftOperator, Path path, int pathIndex) {
     if (!currentBoundary.isPresent()) {
-      return currentBoundary; // no boundary
+      return currentBoundary;
     }
     // Interval size remains identical if stateless, otherwise it becomes current window size
     final long newIntervalSize = current.isStateful() ? current.windowSize() : intervalSize;
-    return current.upstream().stream()
-        .map(upstream -> transformBoundary(upstream, target, currentBoundary.getAsLong(),
-            newIntervalSize, reduceOperator, boundaryFunction, boundaryShiftOperator))
-        .filter(o -> o.isPresent())
-        .mapToLong(
-            o -> o.orElseThrow(() -> new IllegalStateException("Null value! This is a bug!")))
-        .reduce(reduceOperator);
+    for (Operator upstream : current.upstream()) {
+      if (path.at(pathIndex).equals(upstream.id())) {
+        return transformBoundaryForPath(upstream, target,
+            currentBoundary.getAsLong(),
+            newIntervalSize, boundaryFunction, boundaryShiftOperator, path, pathIndex);
+      }
+    }
+    throw new IllegalStateException(
+        String.format("No upstream operator of %s was in path  %s. This is a bug!", current, path));
   }
 
   public long maxDelay() {

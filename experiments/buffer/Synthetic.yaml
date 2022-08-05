@@ -6,20 +6,14 @@ executor_script: './scripts/flink_server_do_run.sh'
 query: 'Synthetic'
 
 dimensions:
-  schema: variant.syntheticFilterDiscardRate.syntheticPredicateSelectivity.syntheticUseEncapsulation
-  syntheticFilterDiscardRate:
-    - 25
-    - 75
-    - 99
-  syntheticPredicateSelectivity:
-    - 1
-    - 25
-    - 50
-    - 75
-    - 99
-  syntheticUseEncapsulation:
-    - true
-    - false
+  schema: variant.bufferDelay
+  bufferDelay:
+    - 0
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
 
 variants:
   - name: MA-1
@@ -32,6 +26,6 @@ variants:
 flink_cmd: "{repo_dir}/flink-1.14.0/bin/flink run --class"
 query_jar: "{repo_dir}/target/streaming-why-not-1.0-SNAPSHOT.jar"
 
-experiment_args: "--detailedProvenance false --kafkaSenderQueueSize 8192"
+experiment_args: "--detailedProvenance false --kafkaSenderQueueSize 8192 --syntheticFilterDiscardRate 99 --syntheticPredicateSelectivity 1 --syntheticUseEncapsulation true"
 
 utilization_command: './scripts/utilization-flink.sh {statistics_folder}'

@@ -1,5 +1,6 @@
 package io.palyvos.provenance.missing.predicate;
 
+import io.palyvos.provenance.missing.util.Path;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -39,6 +40,9 @@ public class Predicate implements Condition, Serializable {
   private final String operator;
   private boolean enabled;
   private final UUID uid;
+
+  private final Path path;
+
   // Lazy initialized boundaries because of OptionalLong's non-serializability
   private transient OptionalLong maxTimeBoundary;
   private transient OptionalLong minTimeBoundary;
@@ -69,10 +73,16 @@ public class Predicate implements Condition, Serializable {
 
   private Predicate(Collection<Condition> conditions,
       PredicateStrategy strategy, String operator, UUID uid, boolean enabled) {
+    this(conditions, strategy, operator, uid, enabled, Path.empty());
+  }
+
+  private Predicate(Collection<Condition> conditions,
+      PredicateStrategy strategy, String operator, UUID uid, boolean enabled, Path path) {
     Validate.notNull(conditions, "conditions");
     Validate.notNull(strategy, "strategy");
     Validate.notEmpty(operator, "operator");
     Validate.notNull(uid, "uid");
+    Validate.notNull(path, "path");
     this.conditions.addAll(conditions);
     for (Condition condition : conditions) {
       storeVariables(condition.variables());
@@ -81,6 +91,7 @@ public class Predicate implements Condition, Serializable {
     this.operator = operator;
     this.uid = uid;
     this.enabled = enabled;
+    this.path = path;
   }
 
   private void storeVariables(Collection<Variable> vars) {
@@ -110,57 +121,125 @@ public class Predicate implements Condition, Serializable {
     }
   }
 
-  @Override
-  public Predicate renamed(Map<String, ? extends Collection<VariableRenaming>> renamings) {
-    return renamed(renamings, this.operator);
-  }
-
-  public Predicate renamed(String operator, String sink, QueryGraphInfo queryGraphInfo) {
-    return renamed(queryGraphInfo.sinkToOperatorVariables(operator, sink), operator);
-  }
-
-  public Predicate renamed(String operator) {
+  public Predicate transformedNameOnly(String operator) {
     return new Predicate(conditions, strategy, operator, uid, enabled);
   }
 
-  private Predicate renamed(Map<String, ? extends Collection<VariableRenaming>> renaming,
-      String operator) {
-    List<Condition> renamed = conditions.stream()
-        .map(c -> c.renamed(renaming))
-        .collect(Collectors.toList());
-    return new Predicate(renamed, strategy, operator, uid, enabled);
-  }
-
   public Predicate transformed(String operator, String sink, QueryGraphInfo queryGraphInfo) {
-    final Predicate transformed = renamed(operator, sink, queryGraphInfo).timeShifted(operator,
-        sink,
-        queryGraphInfo);
+    final Map<String, Set<VariableRenaming>> renamings = queryGraphInfo.sinkToOperatorVariables(
+        operator, sink);
+    final Map<Path, Map<String, List<VariableRenaming>>> pathRenamings = groupVariableRenamingsPerPath(
+        renamings);
+    final Map<Path, Map<TimestampCondition, Condition>> pathTimeTransforms =
+        precomputeTimeTransforms(operator, sink, queryGraphInfo);
+    final List<Condition> pathPredicates = new ArrayList<>();
+    for (Path path : uniquePaths(pathRenamings, pathTimeTransforms)) {
+      Map<String, List<VariableRenaming>> pathRenaming = pathRenamings.get(path);
+      Map<TimestampCondition, Condition> pathTimeTransform = pathTimeTransforms.get(path);
+      final Predicate pathPredicate = pathTransformed(operator,
+          path, pathRenaming, pathTimeTransform);
+      pathPredicates.add(pathPredicate);
+    }
+    Validate.isTrue(pathPredicates.size() > 0,
+        "Transform failed. No path between %s and %s! Have you declared at least one variable/timestamp rule in %s?",
+        sink, operator, QueryGraphInfo.class.getSimpleName());
+    // Do not nest if only one path exists
+    final Predicate transformed =
+        pathPredicates.size() == 1
+            ? (Predicate) pathPredicates.get(0)
+            : new Predicate(pathPredicates, PredicateStrategy.OR, operator, uid, enabled,
+                Path.of(Arrays.asList(sink, "...", operator)));
     LOG.info("Transformed Predicate\n{}", transformed);
     return transformed;
   }
 
-  @Override
-  public Predicate timeShifted(
+  private Set<Path> uniquePaths(Map<Path, Map<String, List<VariableRenaming>>> pathRenamings,
+      Map<Path, Map<TimestampCondition, Condition>> pathTimeTransforms) {
+    // Paths in time and renamings should be equal except if the predicate
+    // does not have any timestamp / attribute condition
+    // Take the union of the paths to handle this edge case
+    final Set<Path> timeAndRenamingPaths = new HashSet<>();
+    timeAndRenamingPaths.addAll(pathTimeTransforms.keySet());
+    timeAndRenamingPaths.addAll(pathRenamings.keySet());
+    return timeAndRenamingPaths;
+  }
+
+  private Map<Path, Map<TimestampCondition, Condition>> precomputeTimeTransforms(
+      String operator, String sink, QueryGraphInfo queryGraphInfo) {
+    BiFunction<Long, Long, Map<Path, OptionalLong>> leftBoundaryTransform =
+        (leftBoundary, rightBoundary) -> queryGraphInfo.transformIntervalStartFromSink(
+            sink, operator, leftBoundary, rightBoundary);
+    BiFunction<Long, Long, Map<Path, OptionalLong>> rightBoundaryTransform =
+        (leftBoundary, rightBoundary) -> queryGraphInfo.transformIntervalEndFromSink(
+            sink, operator, leftBoundary, rightBoundary);
+    Map<Path, Map<TimestampCondition, Condition>> pathTransforms = new HashMap<>();
+    for (Condition condition : baseConditions()) {
+      if (!(condition instanceof TimestampCondition)) {
+        continue;
+      }
+      final TimestampCondition timestampCondition = (TimestampCondition) condition;
+      final Map<Path, Condition> conditionPathTransforms =
+          (timestampCondition).timeShifted(leftBoundaryTransform, rightBoundaryTransform);
+      for (Path path : conditionPathTransforms.keySet()) {
+        final Condition previous = pathTransforms.computeIfAbsent(path, k -> new HashMap<>()).put(
+            timestampCondition, conditionPathTransforms.get(path));
+        Validate.isTrue(previous == null, "Multiple path mappings for same condition!");
+      }
+    }
+    return pathTransforms;
+  }
+
+  private Map<Path, Map<String, List<VariableRenaming>>> groupVariableRenamingsPerPath(
+      Map<String, ? extends Collection<VariableRenaming>> sinkToOperatorVariables) {
+    Map<Path, Map<String, List<VariableRenaming>>> grouping = new HashMap<>();
+    for (String sinkVariable : sinkToOperatorVariables.keySet()) {
+      for (VariableRenaming renaming : sinkToOperatorVariables.get(sinkVariable)) {
+        grouping.computeIfAbsent(renaming.operators(), k -> new HashMap<>())
+            .computeIfAbsent(sinkVariable, k -> new ArrayList<>()).add(renaming);
+      }
+    }
+    return grouping;
+  }
+
+  private Predicate pathTransformed(String operator,
+      Path path, Map<String, List<VariableRenaming>> pathRenaming,
+      Map<TimestampCondition, Condition> pathTimeTransform) {
+    List<Condition> pathConditions = new ArrayList<>();
+    for (Condition condition : conditions) {
+      if (condition instanceof Predicate) {
+        pathConditions.add(
+            ((Predicate) condition).pathTransformed(operator, path, pathRenaming,
+                pathTimeTransform));
+      } else if (condition instanceof TimestampCondition) {
+        pathConditions.add(pathTimeTransform.get(condition));
+      } else if (condition instanceof VariableCondition) {
+        pathConditions.add(((VariableCondition) condition).renamed(pathRenaming));
+      } else if (condition instanceof NonTransformableCondition) {
+        pathConditions.add(condition);
+      } else {
+        throw new IllegalStateException(
+            String.format("Transform failed, unknown Condition type: %s", condition));
+      }
+    }
+    return new Predicate(pathConditions, strategy, operator, uid, enabled, path);
+  }
+
+  public Predicate manualTimeShifted(
       BiFunction<Long, Long, OptionalLong> leftBoundaryTransform,
       BiFunction<Long, Long, OptionalLong> rightBoundaryTransform) {
-    return timeShifted(leftBoundaryTransform, rightBoundaryTransform, this.operator);
-  }
-
-  private Predicate timeShifted(
-      BiFunction<Long, Long, OptionalLong> leftBoundaryTransform,
-      BiFunction<Long, Long, OptionalLong> rightBoundaryTransform, String operator) {
-    List<Condition> shifted = conditions.stream()
-        .map(c -> c.timeShifted(leftBoundaryTransform, rightBoundaryTransform))
-        .collect(Collectors.toList());
+    List<Condition> shifted = new ArrayList<>();
+    for (Condition condition : conditions) {
+      if (condition instanceof Predicate) {
+        shifted.add(
+            ((Predicate) condition).manualTimeShifted(leftBoundaryTransform,
+                rightBoundaryTransform));
+      } else if (condition instanceof TimestampCondition) {
+        shifted.add(
+            ((TimestampCondition) condition).manualTimeShifted(leftBoundaryTransform,
+                rightBoundaryTransform));
+      }
+    }
     return new Predicate(shifted, strategy, operator, uid, enabled);
-  }
-
-  public Predicate timeShifted(String operator, String sink, QueryGraphInfo queryGraphInfo) {
-    return timeShifted(
-        (leftBoundary, rightBoundary) -> queryGraphInfo.transformIntervalStartFromSink(sink,
-            operator, leftBoundary, rightBoundary),
-        (leftBoundary, rightBoundary) -> queryGraphInfo.transformIntervalEndFromSink(sink,
-            operator, leftBoundary, rightBoundary), operator);
   }
 
   public Predicate deepCopy() {
@@ -239,6 +318,10 @@ public class Predicate implements Condition, Serializable {
     return Collections.unmodifiableSet(result);
   }
 
+  public Path path() {
+    return path;
+  }
+
   @Override
   public OptionalLong minTimeBoundary() {
     if (minTimeBoundary == null) {
@@ -289,6 +372,7 @@ public class Predicate implements Condition, Serializable {
         .append("strategy", strategy)
         .append("conditions", conditions)
         .append("enabled", enabled)
+        .append("path", path)
         .toString();
   }
 
@@ -298,7 +382,7 @@ public class Predicate implements Condition, Serializable {
 
   public String description() {
     final String delimiter = " " + strategy.name() + " ";
-    return "(" + conditions.stream().map(Condition::description)
+    return path + ":" + "(" + conditions.stream().map(Condition::description)
         .collect(Collectors.joining(delimiter)) + ")";
   }
 

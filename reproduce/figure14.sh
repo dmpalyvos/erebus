@@ -19,6 +19,6 @@ EXPERIMENT_FOLDER="${COMMIT_CODE}_$(hostname)_${DATE_CODE}"
 echo "Starting experiment. Results will be stored in data/output/$EXPERIMENT_FOLDER"
 sleep 2
 
-./scripts/run.py ./experiments/buffer/Synthetic.yaml -d "$DURATION" -r "$REPS" --kafkaHost "$KAFKA_HOST" -c "$DATE_CODE"
+./scripts/run.py ./experiments/scalability/MoviesScalability.yaml -d "$DURATION" -r "$REPS" --kafkaHost "$KAFKA_HOST" -c "$DATE_CODE"
 
-./reproduce/plot.py --path "data/output/$EXPERIMENT_FOLDER" --plot buffer
+./reproduce/plot.py --path "data/output/$EXPERIMENT_FOLDER" --plot scalability

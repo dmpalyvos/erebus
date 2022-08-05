@@ -39,7 +39,8 @@ public class ReflectionVariableTest {
     TestTuple tuple = new TestTuple();
     Map<String, List<VariableRenaming>> renaming = new HashMap<>();
     renaming.put("f0",
-        Arrays.asList(VariableRenaming.of("timestamp"), VariableRenaming.of("otherAttribute")));
+        Arrays.asList(RenamingHelper.testInstance("timestamp", "o1"),
+            RenamingHelper.testInstance("otherAttribute", "o2")));
     Variable var = ReflectionVariable.fromField("f0");
     List<Variable> renamed = var.renamed(renaming);
     Assert.assertEquals(renamed.size(), 2, "Wrong number of renamed variables");
@@ -62,10 +63,10 @@ public class ReflectionVariableTest {
     registeredTransforms.put("f", F);
     registeredTransforms.put("g", G);
     final VariableRenaming otherAttributeRenaming = new VariableRenaming("otherAttribute",
-        Arrays.asList("f", "g"));
+        Arrays.asList("f", "g"), Arrays.asList("o1", "o2"));
     otherAttributeRenaming.computeTransform(registeredTransforms);
     renaming.put("f0",
-        Arrays.asList(VariableRenaming.of("timestamp"), otherAttributeRenaming));
+        Arrays.asList(RenamingHelper.testInstance("timestamp", "o1"), otherAttributeRenaming));
     Variable var = ReflectionVariable.fromField("f0");
     List<Variable> renamed = var.renamed(renaming);
     Assert.assertEquals(renamed.size(), 2, "Wrong number of renamed variables");

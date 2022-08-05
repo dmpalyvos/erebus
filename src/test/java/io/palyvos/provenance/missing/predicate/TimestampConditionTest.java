@@ -82,7 +82,7 @@ public class TimestampConditionTest {
       throws NoSuchFieldException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {
     TestTuple tuple = new TestTuple();
     Condition condition = TimestampCondition.betweenRightInclusive(10, 30)
-        .timeShifted((l, r) -> OptionalLong.of(l - 5), (l, r) -> OptionalLong.of(r - 3));
+        .manualTimeShifted((l, r) -> OptionalLong.of(l - 5), (l, r) -> OptionalLong.of(r - 3));
     ConditionHelper.load(condition, tuple);
     Assert.assertEquals(condition.evaluate(15), true, "Wrong evaluation");
     Assert.assertEquals(condition.evaluate(0), false, "Wrong evaluation");
@@ -95,7 +95,7 @@ public class TimestampConditionTest {
   public void testTimeShiftedMissing() {
     TestTuple tuple = new TestTuple();
     Condition condition = TimestampCondition.betweenRightInclusive(10, 30)
-        .timeShifted((l, r) -> OptionalLong.empty(), (l, r) -> OptionalLong.of(r - 3));
+        .manualTimeShifted((l, r) -> OptionalLong.empty(), (l, r) -> OptionalLong.of(r - 3));
     Assert.assertTrue(condition instanceof UnsatisfiableCondition);
     Assert.assertFalse(condition.isSatisfiable());
   }

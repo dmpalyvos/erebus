@@ -11,7 +11,7 @@ import org.apache.commons.lang3.Validate;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
-public class OneVariableCondition implements Condition {
+public class OneVariableCondition implements VariableCondition {
 
   protected final Variable var;
   private final Collection<Variable> variables;

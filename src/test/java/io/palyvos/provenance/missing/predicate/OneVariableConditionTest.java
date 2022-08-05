@@ -55,9 +55,10 @@ public class OneVariableConditionTest {
     TestTuple tuple = new TestTuple();
     Map<String, List<VariableRenaming>> renaming = new HashMap<>();
     renaming.put("f0",
-        Arrays.asList(VariableRenaming.of("timestamp"), VariableRenaming.of("otherAttribute")));
+        Arrays.asList(RenamingHelper.testInstance("timestamp"),
+            RenamingHelper.testInstance("otherAttribute")));
     Variable var = ReflectionVariable.fromField("f0");
-    Condition condition = new OneVariableCondition(var, v -> v.asLong() > 10);
+    VariableCondition condition = new OneVariableCondition(var, v -> v.asLong() > 10);
     Condition renamed = condition.renamed(renaming);
     Assert.assertTrue(renamed instanceof Predicate, "Expected predicate class from this renaming");
     Predicate renamedAsPredicate = (Predicate) renamed;

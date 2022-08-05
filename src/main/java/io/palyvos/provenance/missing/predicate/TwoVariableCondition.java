@@ -11,7 +11,7 @@ import org.apache.commons.lang3.Validate;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
-public class TwoVariableCondition implements Condition {
+public class TwoVariableCondition implements VariableCondition {
 
   protected final Variable var1;
   protected final Variable var2;

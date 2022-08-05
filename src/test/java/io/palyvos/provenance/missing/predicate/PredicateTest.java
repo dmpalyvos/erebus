@@ -1,12 +1,8 @@
 package io.palyvos.provenance.missing.predicate;
 
 import io.palyvos.provenance.missing.predicate.Predicate.PredicateStrategy;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.OptionalLong;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -29,10 +25,6 @@ public class PredicateTest {
       return true;
     }
 
-    @Override
-    public Condition renamed(Map<String, ? extends Collection<VariableRenaming>> renamings) {
-      return this;
-    }
   };
 
   @Test
@@ -63,7 +55,7 @@ public class PredicateTest {
 
   @Test
   public void testEvaluateAndOrTimestampShiftTrue() {
-    Predicate predicate = newAndOrMissingPredicateTimestampConditions().timeShifted(
+    Predicate predicate = newAndOrMissingPredicateTimestampConditions().manualTimeShifted(
         (l, r) -> OptionalLong.of(l - 52), (l, r) -> OptionalLong.of(r));
     TestTuple tuple = new TestTuple();
     Assert.assertTrue(predicate.isLoaded(), "Predicate not loaded");
@@ -73,7 +65,7 @@ public class PredicateTest {
 
   @Test
   public void testEvaluateAndOrTimestampShiftFalse() {
-    Predicate predicate = newAndOrMissingPredicateTimestampConditions().timeShifted(
+    Predicate predicate = newAndOrMissingPredicateTimestampConditions().manualTimeShifted(
         (l, r) -> OptionalLong.of(l - 30), (l, r) -> OptionalLong.of(r - 30));
     TestTuple tuple = new TestTuple();
     Assert.assertEquals(
@@ -87,27 +79,6 @@ public class PredicateTest {
     tuple.timestamp = -10; // Make predicate evaluate to false
     Assert.assertTrue(predicate.isLoaded(), "Predicate not loaded");
     Assert.assertEquals(predicate.evaluate(tuple, 0), false, "Predicate evaluation wrong");
-  }
-
-  @Test
-  public void testRename() {
-    TestTuple tuple = new TestTuple();
-    Map<String, List<VariableRenaming>> renaming = new HashMap<>();
-    renaming.put("timestamp",
-        Arrays.asList(VariableRenaming.of("timestamp"), VariableRenaming.of("otherAttribute")));
-    Predicate predicate = newAndOrMissingPredicate().renamed(renaming);
-    tuple.timestamp = 30;
-    tuple.otherAttribute = 40;
-    Assert.assertEquals(predicate.evaluate(tuple, 0), true, "Wrong renaming evaluation");
-    tuple.timestamp = 0;
-    tuple.otherAttribute = 40;
-    Assert.assertEquals(predicate.evaluate(tuple, 0), false, "Wrong renaming 2 evaluation");
-    tuple.timestamp = 30;
-    tuple.otherAttribute = -5;
-    Assert.assertEquals(predicate.evaluate(tuple, 0), false, "Wrong renaming 3 evaluation");
-    tuple.timestamp = 151;
-    tuple.otherAttribute = 180;
-    Assert.assertEquals(predicate.evaluate(tuple, 0), true, "Wrong renaming 4 evaluation");
   }
 
   private static Predicate newAndOrMissingPredicate() {

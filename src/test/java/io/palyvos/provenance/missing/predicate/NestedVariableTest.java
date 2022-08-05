@@ -49,8 +49,9 @@ public class NestedVariableTest {
     TestTuple tuple = new TestTuple();
     Map<String, List<VariableRenaming>> renaming = new HashMap<>();
     renaming.put("first",
-        Arrays.asList(VariableRenaming.of("getNested"), VariableRenaming.of("getNested2")));
-    renaming.put("second", Arrays.asList(VariableRenaming.of("f0"), VariableRenaming.of("f1")));
+        Arrays.asList(RenamingHelper.testInstance("getNested"), RenamingHelper.testInstance("getNested2")));
+    renaming.put("second",
+        Arrays.asList(RenamingHelper.testInstance("f0"), RenamingHelper.testInstance("f1")));
     Variable variable = NestedVariable.of(ReflectionVariable.fromMethod("first"),
         ReflectionVariable.fromField("second"));
     List<Variable> renamed = variable.renamed(renaming);
@@ -74,9 +75,10 @@ public class NestedVariableTest {
       throws NoSuchFieldException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {
     TestTuple tuple = new TestTuple();
     Map<String, List<VariableRenaming>> renaming = new HashMap<>();
-    renaming.put("first", Arrays.asList(VariableRenaming.of("getNested")));
-    renaming.put("second", Arrays.asList(VariableRenaming.of("doubleNested")));
-    renaming.put("third", Arrays.asList(VariableRenaming.of("f0"), VariableRenaming.of("f1")));
+    renaming.put("first", Arrays.asList(RenamingHelper.testInstance("getNested")));
+    renaming.put("second", Arrays.asList(RenamingHelper.testInstance("doubleNested")));
+    renaming.put("third",
+        Arrays.asList(RenamingHelper.testInstance("f0"), RenamingHelper.testInstance("f1")));
     Variable variable = NestedVariable.of(ReflectionVariable.fromMethod("first"),
         ReflectionVariable.fromField("second"), ReflectionVariable.fromField("third"));
     List<Variable> renamed = variable.renamed(renaming);

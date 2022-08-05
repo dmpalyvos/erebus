@@ -2,11 +2,10 @@ package io.palyvos.provenance.missing.predicate;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Map;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
-final class UnsatisfiableCondition implements Condition {
+final class UnsatisfiableCondition implements NonTransformableCondition {
 
   private final Condition original;
   private final String reason;
@@ -29,11 +28,6 @@ final class UnsatisfiableCondition implements Condition {
   @Override
   public boolean isLoaded() {
     return true;
-  }
-
-  @Override
-  public Condition renamed(Map<String, ? extends Collection<VariableRenaming>> renamings) {
-    return this;
   }
 
   @Override

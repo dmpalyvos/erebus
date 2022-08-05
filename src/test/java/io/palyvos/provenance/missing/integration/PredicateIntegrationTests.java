@@ -2,9 +2,13 @@ package io.palyvos.provenance.missing.integration;
 
 import static io.palyvos.provenance.missing.PickedProvenance.QUERY_SINK_NAME;
 
+import io.palyvos.provenance.missing.predicate.OneVariableCondition;
 import io.palyvos.provenance.missing.predicate.Predicate;
+import io.palyvos.provenance.missing.predicate.Predicate.PredicateStrategy;
 import io.palyvos.provenance.missing.predicate.QueryGraphInfo;
 import io.palyvos.provenance.missing.predicate.QueryGraphInfo.Builder;
+import io.palyvos.provenance.missing.predicate.ReflectionVariable;
+import io.palyvos.provenance.missing.predicate.TimestampCondition;
 import io.palyvos.provenance.usecases.cars.local.provenance2.queries.CarLocalMerged;
 import io.palyvos.provenance.usecases.cars.local.provenance2.queries.CarLocalPredicates;
 import io.palyvos.provenance.usecases.linearroad.provenance2.queries.LinearRoadAccident;
@@ -13,11 +17,15 @@ import io.palyvos.provenance.usecases.movies.provenance2.Movies;
 import io.palyvos.provenance.usecases.movies.provenance2.MoviesPredicates;
 import io.palyvos.provenance.usecases.smartgrid.provenance2.SmartGridAnomaly;
 import io.palyvos.provenance.usecases.smartgrid.provenance2.SmartGridAnomalyPredicates;
+import io.palyvos.provenance.usecases.synthetic.SyntheticCondition;
+import io.palyvos.provenance.usecases.synthetic.provenance.queries.SyntheticPickedQuery;
 import io.palyvos.provenance.util.PredicateHolder;
 import java.io.FileNotFoundException;
 import java.util.Collection;
 import java.util.OptionalLong;
+import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.Validate;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class PredicateIntegrationTests {
@@ -53,15 +61,15 @@ public class PredicateIntegrationTests {
       System.out.println("\n" + operator);
       System.out.println(queryInfo.sinkToOperatorVariables(operator, QUERY_SINK_NAME));
       for (String predicateId : predicateHolder.predicates().keySet()) {
-        if (!predicateId.startsWith("Q")) {
-          continue;
-        }
         Predicate predicate = predicateHolder.get(predicateId);
         final Predicate transformed = predicate.transformed(operator, QUERY_SINK_NAME, queryInfo);
-        Validate.isTrue(transformed.isSatisfiable(),
+        // Verify user-defined Q{X} predicates are satisfiable, but not the synthetic ones
+        Validate.isTrue(transformed.isSatisfiable() || !predicateId.startsWith("Q"),
             "%s: Failed to transform predicate %s for operator %s. Transformed: %s",
             predicateHolder.getClass().getSimpleName(), predicateId,
             operator, transformed);
+        System.out.println("Predicate " + predicateId);
+        System.out.println(transformed.description());
       }
     }
     System.out.println();
@@ -73,6 +81,18 @@ public class PredicateIntegrationTests {
         "src/main/resources/CarLocalMerged-DAG.yaml");
     printVariableTransformsAndCheckTimeTransforms(queryInfo, CarLocalMerged.OPERATORS,
         CarLocalPredicates.INSTANCE);
+  }
+
+
+  @Test
+  public void syntheticTransforms() {
+    final QueryGraphInfo queryInfo = SyntheticPickedQuery.getQueryGraphInfo();
+    final Predicate predicate = SyntheticCondition.newPredicate(1, 0);
+    final Predicate transformed = predicate.transformed(SyntheticPickedQuery.FILTER_NAME,
+        QUERY_SINK_NAME, queryInfo);
+    Validate.isTrue(transformed.isSatisfiable(),
+        "Failed to transform synthetic predicate for operator %s",
+        SyntheticPickedQuery.FILTER_NAME);
   }
 
   @Test
@@ -110,15 +130,17 @@ public class PredicateIntegrationTests {
     final QueryGraphInfo queryInfo = QueryGraphInfo.fromYaml(
             "src/main/resources/SmartGridAnomaly-DAG.yaml")
         .registerTransform("ROUND", v -> Math.round((double) v));
-    final long intervalStart = 120_000;
-    final long intervalEnd = 230_000;
-    final String operator = "PLUG-INTERVAL-FILTER";
-    final OptionalLong newStart = queryInfo.transformIntervalStartFromSink(QUERY_SINK_NAME,
+    final long intervalStart = SmartGridAnomalyPredicates.INSTANCE.DATASET_START_TIMESTAMP - 1;
+    final long intervalEnd =
+        SmartGridAnomalyPredicates.INSTANCE.DATASET_START_TIMESTAMP + TimeUnit.MINUTES.toMillis(
+            140);
+    final String operator = "INTERVAL-ENDS-FILTER";
+    final OptionalLong newStart = queryInfo.legacyTransformIntervalStartFromSink(QUERY_SINK_NAME,
         operator, intervalStart, intervalEnd);
-    final OptionalLong newEnd = queryInfo.transformIntervalEndFromSink(QUERY_SINK_NAME,
+    final OptionalLong newEnd = queryInfo.legacyTransformIntervalEndFromSink(QUERY_SINK_NAME,
         operator, intervalStart, intervalEnd);
     System.out.format("I' = [%d, %d]\n", newStart.getAsLong(), newEnd.getAsLong());
-    System.out.format("I_OLD' = [%d, %d]\n", intervalStart - 60_000 - 15_000, intervalEnd);
+    System.out.format("I_OLD' = [%d, %d]\n", intervalStart - 15_000, intervalEnd);
   }
 
 
@@ -149,9 +171,10 @@ public class PredicateIntegrationTests {
       source = current;
     }
     QueryGraphInfo info = builder.build();
-    final OptionalLong start = info.transformIntervalStartFromSink(sink, source, intervalStart,
+    final OptionalLong start = info.legacyTransformIntervalStartFromSink(sink, source,
+        intervalStart,
         intervalEnd);
-    final OptionalLong end = info.transformIntervalEndFromSink(sink, source, intervalStart,
+    final OptionalLong end = info.legacyTransformIntervalEndFromSink(sink, source, intervalStart,
         intervalEnd);
     System.out.format("I = [%d, %d]\n", intervalStart, intervalEnd);
     System.out.println("Window sum: " + windowSum);
@@ -164,4 +187,42 @@ public class PredicateIntegrationTests {
     System.out.println(1e9 / (double) (System.nanoTime() - startTime));
 
   }
+
+  @Test
+  public void testRenameTwoPaths() {
+    QueryGraphInfo queryGraphInfo = new QueryGraphInfo.Builder()
+        .addDownstream("O", "M1")
+        .addDownstream("O", "M2")
+        .addDownstream("M1", "SINK")
+        .addDownstream("M2", "SINK")
+        .addRenaming("O", "A", "A")
+        .addRenaming("O", "B", "B")
+        .addRenaming("M1", "A", "C")
+        .setWindowSize("M2", 33)
+        .addTransform("M1", "A", "DOUBLE")
+        .addRenaming("M1", "B", "D")
+        .addTransform("M1", "B", "DOUBLE")
+        .addRenaming("M2", "A", "C")
+        .addTransform("M2", "A", "TRIPLE")
+        .addRenaming("M2", "B", "D")
+        .addTransform("M2", "B", "TRIPLE")
+        .build();
+    queryGraphInfo.registerTransform("DOUBLE", v -> (int) v * 2);
+    queryGraphInfo.registerTransform("TRIPLE", v -> (int) v * 3);
+    Predicate predicate = Predicate.of(PredicateStrategy.AND,
+        TimestampCondition.greaterEqual(100),
+        new OneVariableCondition(ReflectionVariable.fromField("C"), v -> v.asInt() == 6),
+        new OneVariableCondition(ReflectionVariable.fromField("D"), v -> v.asInt() == 12)
+    ).transformed("O", "SINK", queryGraphInfo);
+    System.out.println(predicate.description());
+    TwoVarTestTuple compatible1 = new TwoVarTestTuple(3, 6);
+    TwoVarTestTuple compatible2 = new TwoVarTestTuple(2, 4);
+    TwoVarTestTuple notCompatible1 = new TwoVarTestTuple(3, 4);
+    Assert.assertTrue(predicate.evaluate(compatible1, 123), "Failed to find compatible");
+    Assert.assertFalse(predicate.evaluate(compatible1, 99), "Correct attributes but wrong ts");
+    Assert.assertTrue(predicate.evaluate(compatible2, 99), "Failed to find compatible");
+    Assert.assertFalse(predicate.evaluate(notCompatible1, 123),
+        "False positive due to path algorithm");
+  }
+
 }

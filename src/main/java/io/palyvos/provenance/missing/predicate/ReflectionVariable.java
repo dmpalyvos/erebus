@@ -101,7 +101,7 @@ public class ReflectionVariable implements Variable {
         renamed.stream()
             .map(renaming -> new ReflectionVariable(renaming.name(), this.strategy.newInstance(),
                 renaming.transform().orElse(null),
-                renaming.transformkeys().stream().collect(Collectors.joining("->"))))
+                renaming.transformKeys().toString()))
             .collect(Collectors.toList());
   }
 

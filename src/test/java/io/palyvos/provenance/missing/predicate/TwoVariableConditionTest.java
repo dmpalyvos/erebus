@@ -52,10 +52,11 @@ public class TwoVariableConditionTest {
       throws NoSuchFieldException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {
     TestTuple tuple = new TestTuple();
     Map<String, List<VariableRenaming>> renaming = new HashMap<>();
-    renaming.put("f0", Arrays.asList(VariableRenaming.of("timestamp"), VariableRenaming.of("otherAttribute")));
+    renaming.put("f0", Arrays.asList(RenamingHelper.testInstance("timestamp", "o1"),
+        RenamingHelper.testInstance("otherAttribute", "o2")));
     Variable var1 = ReflectionVariable.fromField("f0");
     Variable var2 = ReflectionVariable.fromMethod("getStimulus");
-    Condition condition = new TwoVariableCondition(var1, var2,
+    VariableCondition condition = new TwoVariableCondition(var1, var2,
         ((v1, v2) -> v1.asLong() > v2.asLong()));
     Condition renamed = condition.renamed(renaming);
     tuple.timestamp = 100; // var1
@@ -67,11 +68,13 @@ public class TwoVariableConditionTest {
     tuple.timestamp = -1; // var1
     tuple.otherAttribute = 10; // var1
     tuple.setStimulus(0); // var2
-    Assert.assertEquals(renamedAsPredicate.evaluate(tuple, 0), false, "Renaming evaluation 2 failed");
+    Assert.assertEquals(renamedAsPredicate.evaluate(tuple, 0), false,
+        "Renaming evaluation 2 failed");
     tuple.timestamp = 100; // var1
     tuple.otherAttribute = -1; // var1
     tuple.setStimulus(0); // var2
-    Assert.assertEquals(renamedAsPredicate.evaluate(tuple, 0), false, "Renaming evaluation 3 failed");
+    Assert.assertEquals(renamedAsPredicate.evaluate(tuple, 0), false,
+        "Renaming evaluation 3 failed");
   }
 
 }

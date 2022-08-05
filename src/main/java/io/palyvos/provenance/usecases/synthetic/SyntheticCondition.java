@@ -5,6 +5,7 @@ import io.palyvos.provenance.missing.predicate.Predicate;
 import io.palyvos.provenance.missing.predicate.Predicate.PredicateStrategy;
 import io.palyvos.provenance.missing.predicate.ReflectionVariable;
 import io.palyvos.provenance.missing.predicate.Variable;
+import io.palyvos.provenance.missing.predicate.VariableCondition;
 import io.palyvos.provenance.missing.predicate.VariableRenaming;
 import java.util.Arrays;
 import java.util.Collection;
@@ -13,7 +14,7 @@ import java.util.Map;
 import java.util.Random;
 import org.apache.commons.lang3.Validate;
 
-public class SyntheticCondition implements Condition {
+public class SyntheticCondition implements VariableCondition {
 
   private final double selectivity;
   private final Random random = new Random(0);

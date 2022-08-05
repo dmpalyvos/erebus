@@ -13,8 +13,10 @@ from tqdm import tqdm
 from collections import defaultdict
 from adjustText import adjust_text
 import argparse
+import types
+import itertools
 
-''' Compability with jupyter code'''
+''' Compatibility with jupyter code'''
 def display(obj):
   print(obj)
 
@@ -66,7 +68,7 @@ WARMUP_PERCENTAGE = 15
 COOLDOWN_PERCENTAGE = 15
 VARIANT_NP = 'NI'
 VARIANT_EREBUS = 'EB'
-VARIANT_EREBUS_WP = 'EB+WP'
+VARIANT_EREBUS_WP = 'EB+W'
 VARIANT_NAME_TRANSFORMS = {'NP': VARIANT_NP, 'MA-1': VARIANT_EREBUS, 'MA-P': VARIANT_EREBUS_WP}
 
 
@@ -406,7 +408,7 @@ def loadData(folder):
         
     # Preprocess 
     DATA.loc[DATA['parameter'].isin(['latency', 'memory']), 'value'] /= 1e3 # Convert latency to seconds, memory to GB
-    DATA.loc[(DATA['parameter'].isin(['latency', 'provsize']) & (DATA['value'] < 0)), 'value'] = np.nan # Negative average values mean missing
+    DATA.loc[(DATA['parameter'].isin(['latency', 'provsize', 'past-buffer-size']) & (DATA['value'] < 0)), 'value'] = np.nan # Negative average values mean missing   
     DATA.loc[(DATA['parameter'].isin(['provsize']) & (DATA['variant'] != 'MA-P')), 'value'] = np.nan # Provenance size interesting only for provenance variant
     DATA.loc[(DATA.parameter == 'sink-rate') & (DATA.node.str.contains('DROPPED')), 'parameter'] = 'answer-rate'
 
@@ -545,10 +547,10 @@ def answer_percentages(data, dimensions=['predicate'], rename_operators=None, ro
     return pv
         
 
-def auto_set_axis_info(g, xlabel, title_key='col_name', title_fontsize=AXIS_TITLE_SIZE, label_fontsize=AXIS_LABEL_SIZE, title_labels=PARAMETER_LABELS):
+def auto_set_axis_info(g, xlabel, title_key='col_name', title_fontsize=AXIS_TITLE_SIZE, label_fontsize=AXIS_LABEL_SIZE, title_labels=PARAMETER_LABELS, title_pad=8):
     g.set_titles('{' + title_key + '}')
     for ax in g.axes.flat:
-        ax.set_title(title_labels[ax.get_title()], fontsize=title_fontsize, pad=8)
+        ax.set_title(title_labels[ax.get_title()], fontsize=title_fontsize, pad=title_pad)
         ax.set_xlabel(xlabel, fontsize=label_fontsize)
         ax.set_ylabel('', fontsize=label_fontsize)
         
@@ -559,9 +561,11 @@ def total_selectivity(data, variant, predicate):
     print(100*pout/pin)
     
     
-def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VARIANT_NP], export=False, bbox=(0.75, 0), bottom=0.05, ncol=4, adjusttext_args={}, custom_annotations={}):
+def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VARIANT_NP], export=False, bbox=(0.75, 0), bottom=0.05, ncol=4, 
+                               adjusttext_args={}, custom_annotations={}, annotate_predicates=False):
     
     parameters = ['rate', 'latency', 'predicate-in', 'memory', 'cpu', 'predicate-out']
+    
     plot_data = aggregated_per_rep(data, parameters, dimensions, selectivity_column=True)
     plot_data['variant'] = plot_data['variant'].replace(VARIANT_NAME_TRANSFORMS, regex=False)
     plot_data = plot_data[plot_data['variant'].isin(variants)]
@@ -570,7 +574,7 @@ def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VA
     g = sns.relplot(data=plot_data, x='predicate-selectivity', y='value', col='parameter', 
                     hue='variant', style='variant',
                     hue_order=variants, style_order=variants,
-                    kind='line', markers=True, markersize=9, 
+                    kind='line', markers=[',', 'o', 's'], markersize=7, 
                     col_order=parameters,
                     height=1.5, aspect=1.77, col_wrap=3, facet_kws={'sharey': False, 'legend_out': False})
         
@@ -584,7 +588,7 @@ def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VA
             return
         mean = agg.at[0, 'value']
         ci  = agg.at[1, 'value']
-        ax.plot([0, 100], [mean, mean], '-', color='C0')
+        ax.plot([0, 100], [mean, mean], '-,', color='C0')
         ax.fill_between((0,100), mean - ci, mean + ci, alpha=0.2, color='C0')
         # recompute the ax.dataLim
         ax.relim()
@@ -592,8 +596,9 @@ def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VA
         ax.autoscale_view()
 
     def annotate_predicate(data, **kwargs):
-        arrowprops=dict(arrowstyle='simple', color='slategray', alpha=0.65, linewidth=0.05)
+        arrowprops=dict(arrowstyle='simple', color='slategray', alpha=0.65, linewidth=0.025, linestyle='dotted')
         texts = []
+        predicates = []
         ax = plt.gca()
         if VARIANT_NP not in data.variant.unique():
             print('No NP variant, skipping annotations')
@@ -602,30 +607,39 @@ def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VA
         data = data.groupby(['variant', 'predicate']).aggregate({'value': np.mean, 'predicate-selectivity': np.mean}).reset_index()
         referenceValue = data.loc[data.variant == VARIANT_NP, 'value'].values[0]
         for index, row in data.iterrows():
-            if row['variant'] in no_annotations or row['predicate'] in ['none', 'true']:
+            if row['variant'] in no_annotations:
                 continue
             y = row['value'] 
             x = row['predicate-selectivity']
             if not np.isfinite(x) or not np.isfinite(y):
                 continue
+            if annotate_predicates and parameter == 'rate' and row['variant'] == VARIANT_EREBUS:
+                predicate_paper_names = {'Q1': 'P1', 'Q2': 'P2', 'none': 'F', 'true': 'T'}
+                ax.annotate(predicate_paper_names[row['predicate']], xy=(x,y), xytext=(x, 1.05*y), 
+                                              ha='left', size=10, color='C1', weight='bold')
+            if row['predicate'] in ['none', 'true']:
+                continue
             pdiff = percentageDiff(row['value'], referenceValue)
             if not np.isnan(referenceValue):
                 diffStr = f'{pdiff:+0.0f}%' if abs(pdiff) < 100 else f'{row["value"]/float(referenceValue):+0.1f}x'
-                diffStr = '\n(' + diffStr + ')'
             else:
                 diffStr = ''
-            annotation = row['predicate'] + f'{diffStr}'
+            annotation = diffStr
             key = (parameter, row['variant'], row['predicate'])
             if key in custom_annotations:
-                ax.annotate(annotation, xy=(x,y), xytext=custom_annotations[key], arrowprops=arrowprops, ha='left', size=10, color='darkslategray')
+                if not custom_annotations[key]:
+                    continue
+                ax.annotate(annotation, xy=(x,y), xytext=custom_annotations[key], ha='left', size=10, color='darkslategray')
             else:
                 texts.append(ax.text(x, y, annotation, ha='left', size=10, color='darkslategray'))
-        adjust_text(texts, lim=500, autoalign=True, precision=1e-5, ax=ax, arrowprops=arrowprops, **adjusttext_args)
+
+        adjust_text(texts, lim=500, autoalign=True, ax=ax, **adjusttext_args)
+        if predicates:
+            adjust_text(predicates, lim=500, autoalign=True, ax=ax, **adjusttext_args)
     
     g.map_dataframe(plot_np)
 
     for ax in g.axes.flat:
-        ax.set_ylim(bottom=0)
         ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 3), useMathText=False)
 
 
@@ -640,18 +654,11 @@ def predicate_selectivity_plot(data, variants, dimensions=[], no_annotations=[VA
     save_fig(g.fig, 'selectivity_performance', experimentId(), export)
     comparison_table(data, parameters + ['provsize'], dimensions)
     
-TEXT_ADJUST_CONFIGS = {'SmartGridAnomaly': dict(expand_text=(1.5, 1.5), expand_points=(2., 2)),
-                       'LinearRoadAccident': dict(expand_text=(1.5, 1.5), expand_points=(2, 2)),
-                       'Movies': dict(expand_text=(1.75, 1.5), expand_points=(2, 1.75)),
-                       'CarLocalMerged': dict(expand_text=(1.25, 1.25), expand_points=(2, 2))}
+
+TEXT_ADJUST_CONFIGS = defaultdict(lambda: dict(expand_points=(1.15, 1.25)))
 CUSTOM_ANNOTATIONS = defaultdict(lambda: {})
 NO_ANNOTATIONS = defaultdict(lambda: [VARIANT_NP])
 NO_ANNOTATIONS['LinearRoadAccident'] = [VARIANT_NP, VARIANT_EREBUS_WP]
-
-
-
-
-
 
 
 
@@ -779,23 +786,17 @@ def synthetic_plot(data, export=False, bbox=(1, 0), bottom=0.35):
     xlabel = 'Explanation Ratio (%)'
     auto_set_axis_info(g, xlabel)
 
-    # for  (interceptionRatio, parameter), ax in g.axes_dict.items():
-    #     if parameter == 'rate': # First column
-    #         # ax.set_ylabel(r'$i_{O}$ = ' + str(interceptionRatio) + '\%', usetex=True)
-    #         ax.set_ylabel(f'{interceptionRatio}% Intercepted')
     
     for ax in g.axes[:, 0]:
         ax.set_ylim(top=1e5)
         ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 3), useMathText=False)
-    # for ax in g.axes[1:, :].flat:
-    #     ax.set_title('')
     sns.despine()
     
     h,l = g.axes.flat[0].get_legend_handles_labels()
     g.axes.flat[0].legend_.remove()
-    l[0] = 'Tuple Type:'
+    l[0] = 'Tuples:'
     l[3] = 'Interception Ratio (%):'
-    g.fig.legend(h,l, title='', ncol=6, fontsize=LEGEND_LABEL_SIZE, title_fontsize=LEGEND_TITLE_SIZE, 
+    g.fig.legend(h,l, title='', ncol=7, fontsize=LEGEND_LABEL_SIZE, title_fontsize=LEGEND_TITLE_SIZE, 
                  bbox_to_anchor=bbox, frameon=False, columnspacing=1, handlelength=1) 
     g.fig.subplots_adjust(bottom=bottom)
     comparison_table(data, parameters=parameters, dimensions=dimensions, baseline='MA-1/75/1/False')
@@ -822,7 +823,6 @@ def jmh_plot(jmh_df, bbox_x=0.0, bbox_y=0.0, bottom=0.1, export=False):
     
 
     def manual_jmh_lineplot(data, **kws):
-        import itertools
         marker = itertools.cycle(('.', '+', 'x', '*'))
         ax = plt.gca()
         err_col = 'Score Error (99.9%)'
@@ -867,6 +867,54 @@ def jmh_plot(jmh_df, bbox_x=0.0, bbox_y=0.0, bottom=0.1, export=False):
     save_fig(g.fig, 'predicate_benchmark_variables', 'jmh', export)
 
 
+def buffer_size_plot(data, variants, dimensions=['bufferDelay'], export=False, no_annotations=[VARIANT_NP], bbox=(0.75, 0), bottom=0.05, ncol=4, adjusttext_args={}, custom_annotations={}):
+    
+    TUPLE_SIZE_BYTES = 176 # Experiment-specific, computed using Java Object Layout (JOL)
+    parameters = ['rate', 'latency', 'memory', 'cpu']
+    extra_params = ['past-buffer-size']
+
+    plot_data = aggregated_per_rep(data, parameters + extra_params, dimensions, selectivity_column=False)
+    plot_data['variant'] = plot_data['variant'].replace(VARIANT_NAME_TRANSFORMS, regex=False)
+    plot_data = plot_data[plot_data['variant'].isin(variants)]
+    buffer_sizes = plot_data[plot_data.parameter=='past-buffer-size'].copy().groupby(['variant', 'bufferDelay']).mean().reset_index()
+    buffer_sizes.drop(columns=['rep'], inplace=True)
+    buffer_sizes.columns = ['variant', 'bufferDelay', 'past-buffer-size']
+    plot_data = plot_data.merge(buffer_sizes, on=['variant', 'bufferDelay'])
+    buffer_mem = plot_data[plot_data.parameter=='past-buffer-size'].copy()
+    buffer_mem['value'] *= 1e-9 * TUPLE_SIZE_BYTES 
+    buffer_mem['parameter'] = 'buffer-mem'
+    plot_data = pd.concat([plot_data, buffer_mem])
+    g = sns.relplot(data=plot_data, x='past-buffer-size', y='value', col='parameter', 
+                    kind='line', marker='o', markersize=6, 
+                    col_order=parameters, legend=False,
+                    height=1.5, aspect=1.23, col_wrap=4, facet_kws={'sharey': False, 'legend_out': False})
+
+    for param, ax in g.axes_dict.items():  
+        if param != 'memory':
+            continue
+        sns.lineplot(data=plot_data[plot_data.parameter=='buffer-mem'], x='past-buffer-size', y='value', ax=ax,
+                     color='gray', linestyle='--',
+                     marker='^', markersize=6)
+        ax.text(2e7, 10, 'Buffer', color='gray', size=11)
+        ax.yaxis.set_ticks(np.arange(0, 41, 10))
+
+    
+    for ax in g.axes.flat:
+        ax.ticklabel_format(axis='y', style='sci', scilimits=(-2, 3), useMathText=False)
+        ax.get_xaxis().get_offset_text().set_x(1.15)
+        pad = plt.rcParams["xtick.major.size"] + plt.rcParams["xtick.major.pad"]
+        def bottom_offset(self, bboxes, bboxes2):
+            bottom = self.axes.bbox.ymin
+            self.offsetText.set(va="top", ha="left") 
+            oy = bottom - pad * self.figure.dpi / 72.0
+            self.offsetText.set_position((1.025, oy))
+        ax.xaxis._update_offset_text_position = types.MethodType(bottom_offset, ax.xaxis)
+    sns.despine()
+    xlabel = 'Buffered Tuples'
+    auto_set_axis_info(g, xlabel, title_pad=14)
+    save_fig(g.fig, 'bufferdelay_performance', experimentId(), export)
+    comparison_table(data, parameters + extra_params, dimensions, baseline='MA-1/0')
+
 
 NODE_AGGREGATIONS = {'rate': sum_dropna, 'latency': np.mean, 'past-rate': sum_dropna, 'predicate-out': sum_dropna, 
                         'predicate-in': sum_dropna,'answer-rate': sum_dropna, 'past-buffer-size': sum_dropna, 
@@ -877,10 +925,11 @@ PLOT_FUNCTIONS = {
     'time-series': lambda: predicate_time_series_compact(DATA, 240, 3600, 'Q1', trange=(60,590), export=True),
     'averages': lambda: predicate_selectivity_plot(DATA, variants=[VARIANT_NP, VARIANT_EREBUS, VARIANT_EREBUS_WP], dimensions=['predicate'], 
                            export=True, no_annotations=NO_ANNOTATIONS[experimentId()], adjusttext_args=TEXT_ADJUST_CONFIGS[experimentId()], 
-                           custom_annotations=CUSTOM_ANNOTATIONS[experimentId()]),
+                           custom_annotations=CUSTOM_ANNOTATIONS[experimentId()], annotate_predicates=True),
     'synthetic': lambda: synthetic_plot(DATA, export=True),
     'scalability': lambda: predicate_parallelism_plot(DATA, variants=[VARIANT_NP, VARIANT_EREBUS, VARIANT_EREBUS_WP], export=True),
-    'microbench': lambda: jmh_plot(DATA, bbox_x=0.525, bbox_y=0, bottom=0.4, export=True)
+    'microbench': lambda: jmh_plot(DATA, bbox_x=0.525, bbox_y=0, bottom=0.4, export=True),
+    'buffer': lambda: buffer_size_plot(DATA, variants=[VARIANT_EREBUS], dimensions=['bufferDelay'], export=True, no_annotations={}, adjusttext_args={}, custom_annotations={})
 }
 
 

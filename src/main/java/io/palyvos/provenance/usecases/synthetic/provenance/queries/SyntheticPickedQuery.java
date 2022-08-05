@@ -28,7 +28,7 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 
 public class SyntheticPickedQuery {
 
-  private static final String FILTER_NAME = "FILTER";
+  public static final String FILTER_NAME = "FILTER";
   public static final List<String> OPERATORS = Arrays.asList(FILTER_NAME);
 
   /**
@@ -37,9 +37,7 @@ public class SyntheticPickedQuery {
   public static void main(String[] args) throws Exception {
     ExperimentSettings settings = ExperimentSettings.newInstance(args);
 
-    final QueryGraphInfo queryInfo = new QueryGraphInfo.Builder()
-        .addDownstream(FILTER_NAME, PickedProvenance.QUERY_SINK_NAME)
-        .build();
+    final QueryGraphInfo queryInfo = getQueryGraphInfo();
     final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     env.getConfig().enableObjectReuse();
     env.setMaxParallelism(settings.maxParallelism());
@@ -99,6 +97,14 @@ public class SyntheticPickedQuery {
         OPERATORS, queryInfo);
 
     env.execute(SyntheticPickedQuery.class.getSimpleName());
+  }
+
+  public static QueryGraphInfo getQueryGraphInfo() {
+    final QueryGraphInfo queryInfo = new QueryGraphInfo.Builder()
+        .addDownstream(FILTER_NAME, PickedProvenance.QUERY_SINK_NAME)
+        .addRenaming(FILTER_NAME, "dummyVariable", "dummyVariable")
+        .build();
+    return queryInfo;
   }
 
   private static class SyntheticFilterFunction<T> extends RichFilterFunction<T> {

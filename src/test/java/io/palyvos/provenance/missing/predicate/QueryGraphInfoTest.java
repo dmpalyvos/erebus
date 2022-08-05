@@ -1,9 +1,10 @@
 package io.palyvos.provenance.missing.predicate;
 
 import io.palyvos.provenance.missing.predicate.QueryGraphInfo.Builder;
+import io.palyvos.provenance.missing.util.Path;
 import java.io.FileNotFoundException;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.OptionalLong;
@@ -29,7 +30,7 @@ public class QueryGraphInfoTest {
     builder.addRenaming("O", "V1", "V2");
     builder.addRenaming("O", "V2", "V3");
     Assert.assertEquals(builder.build().operatorToSinkVariables("V1", "O"),
-        Arrays.asList(VariableRenaming.of("V2")));
+        Arrays.asList(RenamingHelper.testInstance("V2", "O->SINK")));
   }
 
   @Test
@@ -63,7 +64,7 @@ public class QueryGraphInfoTest {
         .sinkToOperatorVariables("O", "SINK_LEFT");
     Assert.assertEquals(sinkToOperatorVariables.size(), 1, "Wrong mapping size");
     Assert.assertEquals(sinkToOperatorVariables.get("VARSINK_LEFT"),
-        Arrays.asList(VariableRenaming.of("V1")));
+        Arrays.asList(RenamingHelper.testInstance("V1", "SINK_LEFT->LEFT->O")));
   }
 
   @Test
@@ -97,7 +98,7 @@ public class QueryGraphInfoTest {
         .sinkToOperatorVariables("O", "SINK_RIGHT");
     Assert.assertEquals(sinkToOperatorVariables.size(), 1, "Wrong mapping size");
     Assert.assertEquals(sinkToOperatorVariables.get("VARSINK"),
-        Arrays.asList(VariableRenaming.of("V1")));
+        Arrays.asList(RenamingHelper.testInstance("V1", "SINK_RIGHT->RIGHT->O")));
   }
 
 
@@ -125,9 +126,10 @@ public class QueryGraphInfoTest {
         "O");
     Assert.assertEquals(
         operatorToSinkVariables,
-        new HashSet<>((Arrays.asList(new VariableRenaming("VARSINK1", Arrays.asList("f", "g")),
-            new VariableRenaming("VARSINK1", Arrays.asList("f", "g", "k")),
-            new VariableRenaming("V2", Arrays.asList("f", "h"))))));
+        new HashSet<>(
+            (Arrays.asList(RenamingHelper.testInstance("VARSINK1", "f->g", "O->LEFT->SINK"),
+                RenamingHelper.testInstance("VARSINK1", "f->g->k", "O->LEFT->LEFTSIDE->SINK"),
+                RenamingHelper.testInstance("V2", "f->h", "O->RIGHT->SINK")))));
   }
 
   @Test
@@ -138,7 +140,8 @@ public class QueryGraphInfoTest {
         "LEFT");
     Assert.assertEquals(
         operatorToSinkVariables,
-        new HashSet<>((Arrays.asList(new VariableRenaming("NONE", Collections.emptyList())))));
+        new HashSet<>((Arrays.asList(RenamingHelper.testInstance("NONE", "LEFT->LEFTSIDE->SINK"),
+            RenamingHelper.testInstance("NONE", "LEFT->SINK")))));
   }
 
 
@@ -148,7 +151,7 @@ public class QueryGraphInfoTest {
     final Map<String, Set<VariableRenaming>> fcount = queryInfo.sinkToOperatorVariables("FCOUNT",
         "SINK");
     Assert.assertEquals(fcount.get("movieIdentifier"),
-        Arrays.asList(VariableRenaming.of("movieIdentifier")),
+        Arrays.asList(RenamingHelper.testInstance("movieIdentifier", "SINK->FCOUNT")),
         "Renaming failed");
   }
 
@@ -157,9 +160,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = QueryGraphInfo.fromYaml(QUERY_INFO_3_PATH);
     final Map<String, Set<VariableRenaming>> left = queryInfo.sinkToOperatorVariables("LEFT");
     final Map<String, Set<VariableRenaming>> right = queryInfo.sinkToOperatorVariables("RIGHT");
-    Assert.assertEquals(left.get("Anew"), Arrays.asList(VariableRenaming.of("A")),
+    Assert.assertEquals(left.get("Anew"),
+        Arrays.asList(RenamingHelper.testInstance("A", "SINK->JOIN->LEFT")),
         "Left renaming failed");
-    Assert.assertEquals(right.get("Anew"), Arrays.asList(VariableRenaming.of("B")),
+    Assert.assertEquals(right.get("Anew"),
+        Arrays.asList(RenamingHelper.testInstance("B", "SINK->JOIN->RIGHT")),
         "Right renaming failed");
   }
 
@@ -172,9 +177,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 10000;
     final long rightBoundary = 15000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -192,9 +199,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 10000;
     final long rightBoundary = 15000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -211,9 +220,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 10000;
     final long rightBoundary = 11000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertFalse(newLeftBoundary.isPresent(), "Should have failed to compute boundary");
     Assert.assertFalse(newRightBoundary.isPresent(), "Should have failed to compute boundary");
@@ -229,9 +240,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 0;
     final long rightBoundary = 2000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertEquals(newLeftBoundary, OptionalLong.of(0), "Wrong left boundary");
@@ -249,9 +262,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 10000;
     final long rightBoundary = 15000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -272,9 +287,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 20000;
     final long rightBoundary = 40000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -294,9 +311,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 100;
     final long rightBoundary = 500;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("C", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("C", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("C", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -317,9 +336,11 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = builder.build();
     final long leftBoundary = 1000;
     final long rightBoundary = 2000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("D", "A", leftBoundary,
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("D", "A",
+        leftBoundary,
         rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("D", "A", leftBoundary,
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("D", "A",
+        leftBoundary,
         rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -332,9 +353,9 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = QueryGraphInfo.fromYaml(QUERY_INFO_1_PATH);
     final long leftBoundary = 10000;
     final long rightBoundary = 15000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("SINK", "O",
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("SINK", "O",
         leftBoundary, rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("SINK", "O",
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("SINK", "O",
         leftBoundary, rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -348,11 +369,11 @@ public class QueryGraphInfoTest {
         "src/main/resources/LinearRoadAccident-DAG.yaml");
     final long leftBoundary = 0;
     final long rightBoundary = 1000000;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("SINK",
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("SINK",
         "FILTER-ZERO-SPEED",
         leftBoundary, rightBoundary);
     Assert.assertTrue(newLeftBoundary.isPresent(), "Failed to compute new left boundary");
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("SINK",
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("SINK",
         "FILTER-ZERO-SPEED",
         leftBoundary, rightBoundary);
     Assert.assertTrue(newRightBoundary.isPresent(), "Failed to compute new right boundary");
@@ -366,12 +387,21 @@ public class QueryGraphInfoTest {
     // Testing 1) Multiple paths 2) Dead-end path 3) Path that does not fit in interval
     final long leftBoundary = 10000;
     final long rightBoundary = 10005;
-    OptionalLong newLeftBoundary = queryInfo.transformIntervalStartFromSink("SINK", "O",
+    OptionalLong newLeftBoundary = queryInfo.legacyTransformIntervalStartFromSink("SINK", "O",
         leftBoundary, rightBoundary);
-    OptionalLong newRightBoundary = queryInfo.transformIntervalEndFromSink("SINK", "O",
+    OptionalLong newRightBoundary = queryInfo.legacyTransformIntervalEndFromSink("SINK", "O",
         leftBoundary, rightBoundary);
     Assert.assertFalse(newLeftBoundary.isPresent(), "Impossible left boundary transform");
     Assert.assertFalse(newRightBoundary.isPresent(), "Impossible right boundary transform");
+  }
+
+  @Test
+  public void testUpstreamPaths() throws FileNotFoundException {
+    QueryGraphInfo queryInfo = QueryGraphInfo.fromYaml(QUERY_INFO_1_PATH);
+    Set<Path> paths = queryInfo.upstreamPaths("SINK", "O");
+    Assert.assertEquals(paths, new HashSet<>(
+        Arrays.asList(Path.of("SINK", "LEFT", "O"), Path.of("SINK", "LEFTSIDE", "LEFT", "O"),
+            Path.of("SINK", "RIGHT", "O"))));
   }
 
   @Test(expectedExceptions = {IllegalStateException.class})
@@ -397,16 +427,24 @@ public class QueryGraphInfoTest {
     QueryGraphInfo queryInfo = QueryGraphInfo.fromYaml(QUERY_INFO_1_PATH);
     registerTransformsForYaml1(queryInfo);
     final Set<VariableRenaming> variableRenamings = queryInfo.operatorToSinkVariables("V1", "O");
-    final Map<String, TransformFunction> variableTransforms = variableRenamings.stream()
-        .collect(Collectors.toMap(r -> r.transformkeys().stream().collect(Collectors.joining("")),
-            r -> r.transform().get()));
+    final Map<Collection<String>, TransformFunction> variableTransforms = variableRenamings.stream()
+        .collect(Collectors.toMap(r -> r.transformKeys().components(), r -> r.transform().get()));
     final int value = 10;
-    Assert.assertEquals(variableTransforms.get("fgk").apply(value),
+    Assert.assertEquals(variableTransforms.get(Arrays.asList("f", "g", "k")).apply(value),
         TRANSFORM_K.apply(TRANSFORM_G.apply(TRANSFORM_F.apply(value))), "Wrong transform fgk");
-    Assert.assertEquals(variableTransforms.get("fg").apply(value),
+    Assert.assertEquals(variableTransforms.get(Arrays.asList("f", "g")).apply(value),
         TRANSFORM_F.andThen(TRANSFORM_G).apply(value), "Wrong transform fg");
-    Assert.assertEquals(variableTransforms.get("fh").apply(value),
+    Assert.assertEquals(variableTransforms.get(Arrays.asList("f", "h")).apply(value),
         TRANSFORM_F.andThen(TRANSFORM_H).apply(value), "Wrong transform fh");
+  }
+
+  @Test
+  public void testTransform2() throws FileNotFoundException {
+    QueryGraphInfo queryInfo = QueryGraphInfo.fromYaml(QUERY_INFO_1_PATH);
+    registerTransformsForYaml1(queryInfo);
+    final Map<String, Set<VariableRenaming>> variableRenamings = queryInfo.sinkToOperatorVariables(
+        "O", "SINK");
+    System.out.println(variableRenamings);
   }
 
   @Test

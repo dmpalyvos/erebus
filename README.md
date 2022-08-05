@@ -62,7 +62,7 @@ In case of problems with the automatic setup, you can prepare the environment ma
 ### Starting Kafka
 
 
-In your kafka node (referred as `kafka_node` below), run from `repo_dir`:
+In your Kafka node (referred to as `kafka_node` below), run from `repo_dir`:
 ```bash
 cd kafka_2.13-3.1.0
 bin/zookeeper-server-start.sh config/zookeeper.properties
@@ -89,12 +89,12 @@ warmup iterations and regular iterations of JMH:
 ./reproduce/figure6.sh 3 10 25
 ```
 
-where kafka_node is the host running kafka (`localhost` if you started kafka in the same machine).
+where kafka_node is the host running Kafka (`localhost` if you started Kafka in the same machine).
 
 Results are stored in the folder `data/output`.
 In case of problems with python dependencies (especially on Odroids), it is also possible to plot in a separate device, after running the experiment, by copying the result folder and calling reproduce/plot.py with the arguments of the respective reproduce script.
 
-*Some experiment scripts are print debugging information that
+*Some experiment scripts print debugging information that
 is usually safe to ignore, as long as the figures are generated successfully.*
 
 

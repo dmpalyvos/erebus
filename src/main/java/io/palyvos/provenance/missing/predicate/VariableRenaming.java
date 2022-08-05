@@ -1,7 +1,6 @@
 package io.palyvos.provenance.missing.predicate;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import io.palyvos.provenance.missing.util.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,40 +17,48 @@ import org.apache.commons.lang3.builder.ToStringStyle;
 public class VariableRenaming {
 
   private final String name;
-  private final List<String> transformKeys;
+  private final Path transformKeys;
+
+  private final Path operators;
   private Optional<TransformFunction> transform = Optional.empty();
 
-  public static VariableRenaming of(String variable) {
-    return new VariableRenaming(variable, new ArrayList<>());
+  public static VariableRenaming newInstance(String variable) {
+    return new VariableRenaming(variable, Path.empty(), Path.empty());
   }
 
-  VariableRenaming(String name, List<String> transformKeys) {
+
+  VariableRenaming(String name, List<String> transformKeys, List<String> operators) {
+    this(name, Path.of(transformKeys), Path.of(operators));
+  }
+
+  VariableRenaming(String name, Path transformKeys, Path operators) {
     Validate.notEmpty(name, "name");
     Validate.notNull(transformKeys, "transforms");
+    Validate.notNull(operators, "operators");
     this.name = name;
-    this.transformKeys = new ArrayList<>(transformKeys);
+    this.transformKeys = transformKeys;
+    this.operators = operators;
   }
 
-  VariableRenaming transformed(String newName, String transformKey) {
-    VariableRenaming renaming = new VariableRenaming(newName, this.transformKeys);
-    if (transformKey != null && !transformKey.isEmpty()) {
-      renaming.transformKeys.add(transformKey);
-    }
-    return renaming;
+  VariableRenaming transformed(String newName, String transformKey, String operator) {
+    return new VariableRenaming(newName, transformKeys.extendedIfNotEmpty(transformKey),
+        operators.extended(operator));
   }
 
   public VariableRenaming withReverseTransforms(String newName) {
-    VariableRenaming renaming = new VariableRenaming(newName, this.transformKeys);
-    Collections.reverse(renaming.transformKeys);
-    return renaming;
+    return new VariableRenaming(newName, transformKeys.reversed(), operators.reversed());
   }
 
   public String name() {
     return name;
   }
 
-  public List<String> transformkeys() {
-    return Collections.unmodifiableList(transformKeys);
+  public Path transformKeys() {
+    return transformKeys;
+  }
+
+  public Path operators() {
+    return operators;
   }
 
   public Optional<TransformFunction> transform() {
@@ -66,9 +73,10 @@ public class VariableRenaming {
 
   private TransformFunction doComputeTransform(
       Map<String, TransformFunction> registeredTransforms) {
-    Validate.notEmpty(transformKeys, "No transform setup for this renaming. This is a bug!");
+    Validate.isTrue(!transformKeys.isEmpty(),
+        "No transform setup for this renaming. This is a bug!");
     TransformFunction compositeTransform = null;
-    for (String transform : transformkeys()) {
+    for (String transform : transformKeys) {
       TransformFunction currentTransform = registeredTransforms.get(transform);
       Validate.notNull(currentTransform, "No registration for variable transform with key: %s",
           transform);
@@ -90,20 +98,23 @@ public class VariableRenaming {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    VariableRenaming renaming = (VariableRenaming) o;
-    return name.equals(renaming.name) && transformKeys.equals(renaming.transformKeys);
+    VariableRenaming that = (VariableRenaming) o;
+    return name.equals(that.name) && transformKeys.equals(that.transformKeys)
+        && operators.equals(
+        that.operators);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, transformKeys);
+    return Objects.hash(name, transformKeys, operators);
   }
 
   @Override
   public String toString() {
-    return new ToStringBuilder(this, ToStringStyle.SIMPLE_STYLE)
+    return new ToStringBuilder(this, ToStringStyle.SHORT_PREFIX_STYLE)
         .append("name", name)
         .append("transformKeys", transformKeys)
+        .append("operators", operators)
         .toString();
   }
 }
