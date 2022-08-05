@@ -24,6 +24,7 @@ Below we assume the repository has been cloned into the directory `repo_dir`.
 
 ### Step 1: Install Python Requirements
 
+- Using a virtual environment is suggested. 
 - Initializing the environment and running the experiments requires: `gdown pyyaml tqdm`
 - Recreating the figures requires additionally: `pandas matplotlib seaborn numpy adjustText xlsxwriter` 
 
@@ -74,7 +75,7 @@ bin/kafka-server-start.sh config/server.properties
 
 ### Automatic Reproduction of the Paper's Experiments and Plots
 
-The `reproduce/` directory contains a script for each evaluation figure of the paper, which will run the experiment automatically, store the results, and create a plot. You need to provide the `#repetitions`, `duration` in minutes and the hostname/port of the `kafka_node` as arguments.
+The `reproduce/` directory contains a script for each evaluation figure of the paper, which will run the experiment automatically, store the results, and create a plot. You need to provide the `#repetitions`, `duration` in minutes, and the hostname/port of the `kafka_node` as arguments.
 For example, to reproduce Figure 6, run (from `repo_dir`):
 
 ```bash
@@ -89,7 +90,7 @@ warmup iterations and regular iterations of JMH:
 ./reproduce/figure6.sh 3 10 25
 ```
 
-where kafka_node is the host running Kafka (`localhost` if you started Kafka in the same machine).
+where kafka_node is the host running Kafka (`localhost` if you started Kafka on the same machine).
 
 Results are stored in the folder `data/output`.
 In case of problems with python dependencies (especially on Odroids), it is also possible to plot in a separate device, after running the experiment, by copying the result folder and calling reproduce/plot.py with the arguments of the respective reproduce script.
