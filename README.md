@@ -1,5 +1,14 @@
 # Erebus
 
+This repository contains the evaluation artifacts of the paper:
+
+> Dimitris Palyvos-Giannas, Katerina Tzompanaki, Marina Papatriantafilou,
+and Vincenzo Gulisano. Erebus: Explaining the Outputs of Data Streaming
+Queries. PVLDB, 16(2): 230 - 242, 2022.
+doi:10.14778/3565816.3565825
+
+[Full text](https://www.vldb.org/pvldb/volumes/16/paper/Erebus%3A%20Explaining%20the%20Outputs%20of%20Data%20Streaming%20Queries)
+
 In the following, we are providing necessary setup steps as well as instructions on how to run the
 experiments from our paper and how to visualize them. All steps have been tested under **Ubuntu
 20.04**.
